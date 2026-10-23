@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Luumo Caisse & ERP",
+    "slug": "luumo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "luumo",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#06231A"
+    },
+    "android": {
+      "package": "gn.luumo.erp",
+      "adaptiveIcon": {
+        "backgroundColor": "#06231A"
+      },
+      "permissions": ["CAMERA"]
+    },
+    "ios": {
+      "bundleIdentifier": "gn.luumo.erp",
+      "supportsTablet": true
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autoriser Luumo à utiliser la caméra pour scanner les codes-barres des articles."
+        }
+      ]
+    ]
+  }
+}
