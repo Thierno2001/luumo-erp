@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Règle d'isolation Multi-Sociétés (OWASP A01 : Broken Access Control) -->
+        <record id="rule_luumo_payment_transaction_multi_company" model="ir.rule">
+            <field name="name">Transactions Mobile Money Luumo : Isolation Multi-Sociétés</field>
+            <field name="model_id" ref="model_luumo_payment_transaction"/>
+            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="global" eval="True"/>
+        </record>
+    </data>
+</odoo>

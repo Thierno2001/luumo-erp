@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Activer et configurer le Franc Guinéen (GNF) : arrondi à l'unité (0 décimale) -->
+        <record id="base.GNF" model="res.currency">
+            <field name="active" eval="True"/>
+            <field name="rounding">1.0</field>
+            <field name="position">after</field>
+            <field name="symbol">GNF</field>
+        </record>
+    </data>
+</odoo>
