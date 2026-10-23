@@ -141,37 +141,18 @@ export const api = {
       throw new ApiError(pwCheck.error || "Mot de passe invalide.", 422);
     }
 
-    try {
-      const { data } = await post<{ user: User; currency: Currency }>("/auth/register", {
-        company_name,
-        admin_name,
-        login,
-        phone,
-        city,
-        nif_rccm,
-        password: input.password,
-      });
-      const session: Session = { mode: "live", user: data.user, currency: data.currency };
-      writeSession(session);
-      return session;
-    } catch (err) {
-      // Si le serveur local n'est pas démarré (0 / 502 / 503 / 404), on ouvre directement l'espace
-      if (err instanceof ApiError && (err.status === 0 || err.status >= 500 || err.status === 404)) {
-        const session: Session = {
-          mode: "demo",
-          user: {
-            id: Math.floor(Math.random() * 1000) + 10,
-            name: admin_name,
-            login,
-            company: { id: Math.floor(Math.random() * 100) + 2, name: `${company_name} — ${city}` },
-          },
-          currency: DEMO_CURRENCY,
-        };
-        writeSession(session);
-        return session;
-      }
-      throw err;
-    }
+    const { data } = await post<{ user: User; currency: Currency }>("/auth/register", {
+      company_name,
+      admin_name,
+      login,
+      phone,
+      city,
+      nif_rccm,
+      password: input.password,
+    });
+    const session: Session = { mode: "live", user: data.user, currency: data.currency };
+    writeSession(session);
+    return session;
   },
 
   startDemo(): Session {

@@ -169,7 +169,13 @@ class LuumoAuthController(LuumoBaseController):
 
                 new_user = su_env['res.users'].create(user_vals)
 
+            # Valider définitivement la création en base avant l'authentification
+            # (nécessaire car authenticate() ouvre son propre curseur PostgreSQL)
+            request.env.cr.commit()
+
             request.session.authenticate(db, {'login': login, 'password': password, 'type': 'password'})
+            clear_rate_limit(f'register_ip:{ip}')
+            clear_rate_limit(f'login_acct:{login}')
             if request.session.should_rotate:
                 root.session_store.rotate(request.session, request.env)
 
