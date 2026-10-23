@@ -39,12 +39,14 @@ status:
 	@curl -s http://127.0.0.1:8069/api/luumo/v1/health || echo "Backend API non démarré sur :8069"
 
 init-db:
-	docker compose exec web odoo -d luumo -i luumo_base,luumo_api --without-demo=all --stop-after-init
-	docker compose restart web
+	docker compose stop web
+	docker compose run --rm web odoo -d luumo -i luumo_base,luumo_api --without-demo=all --stop-after-init
+	docker compose start web
 
 upgrade:
-	docker compose exec web odoo -d luumo -u luumo_base,luumo_api --without-demo=all --stop-after-init
-	docker compose restart web
+	docker compose stop web
+	docker compose run --rm web odoo -d luumo -u luumo_base,luumo_api --without-demo=all --stop-after-init
+	docker compose start web
 
 check:
 	python3 -m py_compile custom_addons/luumo_base/models/*.py custom_addons/luumo_api/services/*.py custom_addons/luumo_api/controllers/*.py scripts/bump-version.py
