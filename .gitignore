@@ -1,0 +1,42 @@
+# ==============================================================================
+# LUUMO — Fichiers exclus du suivi Git
+# ==============================================================================
+
+# Clone local du code source Odoo upstream (le projet utilise l'image Docker odoo:18.0)
+/odoo/
+
+# Secrets & Environnements locaux (ne jamais versionner .env)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js / Next.js (luumo_web) & Expo (luumo_mobile)
+node_modules/
+.next/
+out/
+dist/
+build/
+.expo/
+web-build/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Système & IDE
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
