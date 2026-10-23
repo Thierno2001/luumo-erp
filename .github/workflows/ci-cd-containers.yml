@@ -1,0 +1,155 @@
+name: Luumo CI/CD — Tests & Publication Images (GHCR)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ============================================================================
+  # ÉTAPE 1 : Contrôle Qualité, Compilation Python & Typage TypeScript
+  # ============================================================================
+  quality-check:
+    name: Validation Backend (Python) & Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: Configuration Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compilation statique des modules Backend (luumo_base & luumo_api)
+        run: |
+          python3 -m py_compile \
+            custom_addons/luumo_base/models/*.py \
+            custom_addons/luumo_api/services/*.py \
+            custom_addons/luumo_api/controllers/*.py
+
+      - name: Configuration Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: luumo_web/package-lock.json
+
+      - name: Vérification stricte TypeScript (luumo_web)
+        working-directory: ./luumo_web
+        run: |
+          npm ci
+          npx tsc --noEmit
+
+  # ============================================================================
+  # ÉTAPE 2 : Build & Push de l'image Backend vers GitHub Container Registry
+  # ============================================================================
+  build-backend-image:
+    name: Build & Push Image Backend (ghcr.io)
+    needs: quality-check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: Initialisation Docker Buildx (Cache GHA)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authentification sur GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraction des tags SemVer & Métadonnées OCI
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/luumo-backend
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build et Push de l'image Backend immuable
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.meta-backend.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta-backend.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha,scope=luumo-backend
+          cache-to: type=gha,mode=max,scope=luumo-backend
+
+  # ============================================================================
+  # ÉTAPE 3 : Build & Push de l'image Web vers GitHub Container Registry
+  # ============================================================================
+  build-web-image:
+    name: Build & Push Image Web (ghcr.io)
+    needs: quality-check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: Initialisation Docker Buildx (Cache GHA)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authentification sur GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraction des tags SemVer & Métadonnées OCI
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/luumo-web
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build et Push de l'image Web Standalone
+        uses: docker/build-push-action@v6
+        with:
+          context: ./luumo_web
+          file: ./luumo_web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          build-args: |
+            ODOO_URL=http://web:8069
+            APP_VERSION=${{ steps.meta-web.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=luumo-web
+          cache-to: type=gha,mode=max,scope=luumo-web

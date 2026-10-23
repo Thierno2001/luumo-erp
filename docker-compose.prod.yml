@@ -1,0 +1,74 @@
+# ==============================================================================
+# LUUMO PRODUCTION — Déploiement par images versionnées depuis GHCR (ghcr.io)
+# Usage : LUUMO_VERSION=2.0.0 docker compose -f docker-compose.prod.yml up -d
+# ==============================================================================
+services:
+  luumo_web:
+    image: ghcr.io/${GITHUB_ORG:-luumo}/luumo-web:${LUUMO_VERSION:-2.0.0}
+    container_name: luumo_web_frontend
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - ODOO_URL=http://web:8069
+    networks:
+      - luumo_internal_net
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/${GITHUB_ORG:-luumo}/luumo-backend:${LUUMO_VERSION:-2.0.0}
+    container_name: luumo_odoo_backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8069:8069"
+    environment:
+      - HOST=db
+      - PORT=5432
+      - USER=${POSTGRES_USER:-odoo}
+      - PASSWORD=${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env}
+      - LUUMO_DB_NAME=${LUUMO_DB_NAME:-luumo}
+      - LUUMO_AUTO_UPGRADE=${LUUMO_AUTO_UPGRADE:-1}
+      - LUUMO_GATEWAY_PROVIDER=${LUUMO_GATEWAY_PROVIDER:-djomi}
+      - LUUMO_MERCHANT_ID=${LUUMO_MERCHANT_ID:-620145}
+      - LUUMO_GATEWAY_API_URL=${LUUMO_GATEWAY_API_URL:-}
+      - LUUMO_API_SECRET=${LUUMO_API_SECRET:-}
+      - LUUMO_WEBHOOK_SECRET=${LUUMO_WEBHOOK_SECRET:?Definir LUUMO_WEBHOOK_SECRET dans .env}
+      - LUUMO_PUBLIC_BASE_URL=${LUUMO_PUBLIC_BASE_URL:-}
+    volumes:
+      - odoo-web-data:/var/lib/odoo
+    networks:
+      - luumo_internal_net
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    container_name: luumo_postgres_db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-odoo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - luumo_internal_net
+    restart: unless-stopped
+
+networks:
+  luumo_internal_net:
+    driver: bridge
+
+volumes:
+  odoo-web-data:
+  odoo-db-data:

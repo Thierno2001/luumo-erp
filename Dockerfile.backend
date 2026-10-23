@@ -1,0 +1,41 @@
+# ==============================================================================
+# LUUMO BACKEND — Image Docker immuable de Production (CI/CD & GHCR)
+# ==============================================================================
+FROM odoo:18.0
+
+ARG APP_VERSION=2.0.0
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Luumo ERP & POS Backend API" \
+      org.opencontainers.image.description="Backend modulaire Luumo (Guinée / OHADA / Mobile Money B2B)" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.vendor="Luumo Tech"
+
+USER root
+
+# Copie du script d'entrée et des configurations durcies
+COPY --chown=odoo:odoo ./scripts/entrypoint-backend.sh /usr/local/bin/luumo-entrypoint.sh
+RUN chmod +x /usr/local/bin/luumo-entrypoint.sh
+
+COPY --chown=odoo:odoo ./config/odoo.conf /etc/odoo/odoo.conf
+
+# Copie immuable des modules métier Luumo dans l'image (aucun bind-mount requis en prod)
+COPY --chown=odoo:odoo ./custom_addons/luumo_base /mnt/extra-addons/luumo_base
+COPY --chown=odoo:odoo ./custom_addons/luumo_api /mnt/extra-addons/luumo_api
+
+# Pré-compilation du bytecode Python (.pyc) pour accélérer le démarrage et détecter toute erreur
+RUN python3 -m compileall -q /mnt/extra-addons/luumo_base /mnt/extra-addons/luumo_api
+
+# Exécution sous l'utilisateur non-privilégié "odoo" (OWASP Docker Security)
+USER odoo
+
+EXPOSE 8069
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:8069/api/luumo/v1/health || exit 1
+
+ENTRYPOINT ["/bin/bash", "/usr/local/bin/luumo-entrypoint.sh"]
+CMD ["odoo"]
