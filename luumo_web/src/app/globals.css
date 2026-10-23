@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #115040;
+  --color-primary-strong: #0B382C;
+  --color-primary-soft: #E8F2EE;
+  --color-ink: #0B382C;
+  --color-gold: #F3BC33;
+  --color-amber: #E8A02B;
+  --color-gold-text: #8F5E00;
+  --color-gold-soft: #FEF6DF;
+  --color-alert: #C2410C;
+  --color-alert-soft: #FFEDD5;
+  --color-bg: #F7F9F8;
+  --color-card: #FFFFFF;
+  --color-border: #DCE5E1;
+  --color-muted: #EEF3F1;
+  --color-text: #0B2920;
+  --color-text-muted: #526B63;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: var(--font-heading), system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.card-shadow {
+  box-shadow: 0 1px 3px rgba(17, 80, 64, 0.05), 0 10px 28px -12px rgba(17, 80, 64, 0.12);
+}
+
+.luumo-gold-gradient {
+  background: linear-gradient(135deg, #F3BC33 0%, #E8A02B 100%);
+}
+
+.luumo-brand-bar {
+  background: linear-gradient(90deg, #115040 0%, #115040 45%, #F3BC33 80%, #E8A02B 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
