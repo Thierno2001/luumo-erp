@@ -16,11 +16,13 @@ import {
   Printer,
   ShoppingBag,
   QrCode,
+  WifiOff,
 } from "lucide-react";
 import { AppShell, ErrorBanner, Modal, StockBadge } from "@/components/ui";
 import { QrCodeVisual, QrPaymentModal } from "@/components/qr-payment";
 import { api } from "@/lib/api";
 import { formatDateTime, formatGNF } from "@/lib/format";
+import { offlineSyncManager, useOfflineSync } from "@/lib/offline-sync";
 import type { Customer, Order, PaymentMethod, Product } from "@/lib/types";
 
 type CartItem = {
@@ -72,8 +74,19 @@ export default function PosPage() {
       ]);
       setProducts(prodRes.data);
       setCustomers(custRes.data);
+      offlineSyncManager.cacheCatalog(prodRes.data);
+      offlineSyncManager.cacheCustomers(custRes.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de chargement");
+      // En cas de coupure réseau, on charge immédiatement le catalogue local en cache
+      const cachedProds = offlineSyncManager.getCachedCatalog();
+      const cachedCusts = offlineSyncManager.getCachedCustomers();
+      if (cachedProds.length) {
+        setProducts(cachedProds);
+        setCustomers(cachedCusts);
+        setError("Mode hors-ligne : catalogue local chargé depuis la mémoire de l'appareil.");
+      } else {
+        setError(err instanceof Error ? err.message : "Erreur de chargement");
+      }
     } finally {
       setLoading(false);
     }
@@ -150,6 +163,46 @@ export default function PosPage() {
   const executeOrderCreation = async (qrRef?: string) => {
     setError(null);
     setSubmitting(true);
+    const selectedCustomer = customers.find((c) => c.id === partnerId);
+    const partnerName = selectedCustomer ? selectedCustomer.name : "Client comptoir";
+
+    // Mode Hors-ligne immédiat si aucune connexion détectée
+    if (!offlineSyncManager.isOnline()) {
+      const offlineOrder = offlineSyncManager.queueOfflineOrder({
+        partner_id: partnerId,
+        partner_name: partnerName,
+        payment,
+        lines: cart.map((item) => ({
+          product_id: item.product.id,
+          name: item.product.name,
+          qty: item.qty,
+          price_unit: item.price_unit,
+        })),
+      });
+
+      const mockOrder: Order = {
+        id: Math.floor(Math.random() * 1000) + 9000,
+        name: offlineOrder.offline_uuid,
+        date: offlineOrder.created_at,
+        partner: { id: partnerId ?? 0, name: partnerName },
+        state: "sale",
+        amount_total: offlineOrder.amount_total,
+        amount_untaxed: offlineOrder.amount_total,
+        invoice_status: "invoiced",
+        payment_state: payment === "credit" ? "not_paid" : "paid",
+        lines: offlineOrder.lines,
+      };
+
+      setLastQrRef(qrRef ?? null);
+      setQrModalOpen(false);
+      setCompletedOrder(mockOrder);
+      setCart([]);
+      setPartnerId(null);
+      setPayment("cash");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const order = await api.createOrder({
         partner_id: partnerId,
@@ -169,7 +222,39 @@ export default function PosPage() {
       setPayment("cash");
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec de validation de la vente");
+      // Coupure de réseau pendant l'envoi : bascule automatique sur la file hors-ligne
+      console.warn("Échec réseau lors de la vente, bascule hors-ligne :", err);
+      const offlineOrder = offlineSyncManager.queueOfflineOrder({
+        partner_id: partnerId,
+        partner_name: partnerName,
+        payment,
+        lines: cart.map((item) => ({
+          product_id: item.product.id,
+          name: item.product.name,
+          qty: item.qty,
+          price_unit: item.price_unit,
+        })),
+      });
+
+      const mockOrder: Order = {
+        id: Math.floor(Math.random() * 1000) + 9000,
+        name: offlineOrder.offline_uuid,
+        date: offlineOrder.created_at,
+        partner: { id: partnerId ?? 0, name: partnerName },
+        state: "sale",
+        amount_total: offlineOrder.amount_total,
+        amount_untaxed: offlineOrder.amount_total,
+        invoice_status: "invoiced",
+        payment_state: payment === "credit" ? "not_paid" : "paid",
+        lines: offlineOrder.lines,
+      };
+
+      setLastQrRef(qrRef ?? null);
+      setQrModalOpen(false);
+      setCompletedOrder(mockOrder);
+      setCart([]);
+      setPartnerId(null);
+      setPayment("cash");
     } finally {
       setSubmitting(false);
     }
@@ -584,6 +669,15 @@ export default function PosPage() {
       >
         {completedOrder && (
           <div className="space-y-5">
+            {completedOrder.name.startsWith("LUUMO-OFFLINE") && (
+              <div className="p-3.5 rounded-xl bg-[#FEF6DF] border border-[#F3BC33]/60 text-[#8F5E00] text-xs flex items-center gap-2.5">
+                <WifiOff className="w-5 h-5 text-[#C2410C] shrink-0" />
+                <span>
+                  <strong>Vente enregistrée en mode hors-ligne.</strong> Le reçu est certifié localement et sera synchronisé automatiquement vers votre serveur Cloud dès le rétablissement de la connexion.
+                </span>
+              </div>
+            )}
+
             <div className="p-4 rounded-xl bg-[#E8F2EE] border border-[#115040]/30 flex items-center gap-3 text-[#0B382C]">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
               <div>

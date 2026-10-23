@@ -242,6 +242,36 @@ export const api = {
     return (await post<Order>("/orders/create", { deliver: true, ...input })).data;
   },
 
+  async batchSyncOrders(orders: Array<CreateOrderInput & { offline_uuid: string; reference?: string }>): Promise<{
+    synced_count: number;
+    error_count: number;
+    synced: Array<{ offline_uuid: string; order_id: number; name: string; amount_total: number; state: string }>;
+    errors: Array<{ offline_uuid: string; error: string }>;
+  }> {
+    if (isDemo()) {
+      return {
+        synced_count: orders.length,
+        error_count: 0,
+        synced: orders.map((o) => ({
+          offline_uuid: o.offline_uuid,
+          order_id: Math.floor(Math.random() * 1000) + 10,
+          name: `SO-${o.offline_uuid.slice(-6)}`,
+          amount_total: o.lines.reduce((s, l) => s + (l.price_unit ?? 0) * l.qty, 0),
+          state: "sale",
+        })),
+        errors: [],
+      };
+    }
+    return (
+      await post<{
+        synced_count: number;
+        error_count: number;
+        synced: Array<{ offline_uuid: string; order_id: number; name: string; amount_total: number; state: string }>;
+        errors: Array<{ offline_uuid: string; error: string }>;
+      }>("/orders/batch-sync", { orders })
+    ).data;
+  },
+
   async purchases(): Promise<Paged<PurchaseOrder>> {
     if (isDemo()) return demo.purchases();
     const r = await get<PurchaseOrder[]>("/purchases");

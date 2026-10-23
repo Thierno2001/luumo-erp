@@ -22,8 +22,11 @@ import {
   Briefcase,
   Truck,
   ArrowUpRight,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useSession } from "@/context/session";
+import { useOfflineSync } from "@/lib/offline-sync";
 import type { PaymentState } from "@/lib/types";
 
 /**
@@ -444,6 +447,52 @@ export function ErrorBanner({
 }
 
 /**
+ * Badge de connectivité et de synchronisation pour le mode Hybride B2B
+ */
+export function NetworkSyncBadge() {
+  const { isOnline, pendingCount, isSyncing, triggerSync } = useOfflineSync();
+
+  if (isOnline && pendingCount === 0) {
+    return (
+      <span
+        title="Connecté au serveur Cloud Luumo (Toutes les ventes sont synchronisées)"
+        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-100 text-[11px] font-medium border border-emerald-400/30"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="hidden xl:inline">En ligne</span>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => triggerSync()}
+      disabled={isSyncing}
+      title={
+        !isOnline
+          ? `Mode Hors-Ligne actif : ${pendingCount} vente(s) enregistrée(s) localement`
+          : `${pendingCount} vente(s) hors-ligne prêtes à être synchronisées. Cliquez pour synchroniser maintenant.`
+      }
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FEF6DF] text-[#8F5E00] hover:bg-[#F3BC33] hover:text-[#0B2920] text-[11px] font-semibold border border-[#F3BC33]/60 transition-all cursor-pointer shadow-sm animate-pulse"
+    >
+      {!isOnline ? (
+        <WifiOff className="w-3.5 h-3.5 text-[#C2410C]" />
+      ) : (
+        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+      )}
+      <span>
+        {isSyncing
+          ? "Synchronisation..."
+          : !isOnline
+            ? `Hors-ligne (${pendingCount})`
+            : `Sync (${pendingCount})`}
+      </span>
+    </button>
+  );
+}
+
+/**
  * Coquille d'application (AppShell) épurée façon Odoo WebClient :
  * - AUCUNE barre latérale gauche encombrante.
  * - Une seule barre supérieure (NavBar) avec :
@@ -524,8 +573,10 @@ export function AppShell({
             </nav>
           </div>
 
-          {/* Droite : Boutique + Mode Démo + Utilisateur */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Droite : Indicateur Réseau/Sync + Boutique + Mode Démo + Utilisateur */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <NetworkSyncBadge />
+
             {session.mode === "demo" && (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FEF6DF] text-[#8F5E00] text-[11px] font-semibold">
                 <Sparkles className="w-3 h-3 text-[#E8A02B]" />
