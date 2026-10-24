@@ -12,6 +12,8 @@ import {
 } from "./security";
 import type {
   CreateCustomerInput,
+  CreateEmployeeInput,
+  CreateExpenseInput,
   CreateOrderInput,
   Currency,
   Customer,
@@ -20,6 +22,7 @@ import type {
   Employee,
   Expense,
   GuineaQrProvider,
+  HrOverview,
   Order,
   Paged,
   PaymentIntent,
@@ -306,19 +309,17 @@ export const api = {
     return (await post<PurchaseOrder>(`/purchases/${poId}/receive`, {})).data;
   },
 
-  async hrOverview(): Promise<{ employees: Employee[]; expenses: Expense[] }> {
+  async hrOverview(): Promise<HrOverview> {
     if (isDemo()) return demo.hrOverview();
-    return (
-      await get<{ employees: Employee[]; expenses: Expense[] }>("/hr/overview")
-    ).data;
+    return (await get<HrOverview>("/hr/overview")).data;
   },
 
-  async createExpense(input: {
-    name: string;
-    category: string;
-    employee: string;
-    total_amount: number;
-  }): Promise<Expense> {
+  async createEmployee(input: CreateEmployeeInput): Promise<Employee> {
+    if (isDemo()) return demo.createEmployee(input);
+    return (await post<Employee>("/hr/employees/create", input)).data;
+  },
+
+  async createExpense(input: CreateExpenseInput): Promise<Expense> {
     if (isDemo()) return demo.createExpense(input);
     return (await post<Expense>("/hr/expenses/create", input)).data;
   },

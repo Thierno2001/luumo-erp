@@ -64,6 +64,14 @@ export default function PosPage() {
   const [newCustPhone, setNewCustPhone] = useState("+224 ");
   const [newCustCity, setNewCustCity] = useState("Conakry");
 
+  // Sortie directe de caisse physique (décaissement immédiat)
+  const [cashOutOpen, setCashOutOpen] = useState(false);
+  const [cashOutReason, setCashOutReason] = useState("Gasoil Groupe Électrogène");
+  const [cashOutAmount, setCashOutAmount] = useState("");
+  const [cashOutBeneficiary, setCashOutBeneficiary] = useState("");
+  const [submittingCashOut, setSubmittingCashOut] = useState(false);
+  const [cashOutFeedback, setCashOutFeedback] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -303,11 +311,62 @@ export default function PosPage() {
     }
   };
 
+  const handleCashOut = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(cashOutAmount);
+    if (!cashOutReason.trim() || amount <= 0) return;
+
+    setSubmittingCashOut(true);
+    try {
+      await api.createExpense({
+        name: cashOutReason.trim(),
+        total_amount: amount,
+        employee: cashOutBeneficiary.trim() || "Caisse Comptoir",
+        from_cash: true,
+      });
+      setCashOutOpen(false);
+      setCashOutAmount("");
+      setCashOutBeneficiary("");
+      setCashOutFeedback(`Sortie de caisse de ${formatGNF(amount)} enregistrée.`);
+      setTimeout(() => setCashOutFeedback(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur lors du décaissement.");
+    } finally {
+      setSubmittingCashOut(false);
+    }
+  };
+
   return (
     <AppShell
       title="Caisse Comptoir"
       subtitle="Prise de commande instantanée, sortie de stock et encaissement en 1 clic"
+      actions={
+        <button
+          type="button"
+          onClick={() => setCashOutOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#DCE5E1] hover:border-[#C2410C] hover:bg-orange-50 text-[#C2410C] text-xs font-semibold shadow-xs cursor-pointer transition-colors"
+        >
+          <Banknote className="w-3.5 h-3.5 text-[#C2410C]" />
+          <span>Sortie de caisse</span>
+        </button>
+      }
     >
+      {cashOutFeedback && (
+        <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{cashOutFeedback}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCashOutFeedback(null)}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4">
           <ErrorBanner message={error} />
@@ -774,6 +833,80 @@ export default function PosPage() {
         submitting={submitting}
         onConfirm={({ reference }) => executeOrderCreation(reference)}
       />
+
+      {/* Modal Sortie de caisse physique immédiate */}
+      <Modal
+        open={cashOutOpen}
+        onClose={() => setCashOutOpen(false)}
+        title="Sortie de caisse (Décaissement espèces)"
+      >
+        <form onSubmit={handleCashOut} className="space-y-4">
+          <p className="text-xs text-[#526B63]">
+            Enregistrez tout retrait d&apos;espèces du tiroir-caisse (gasoil, dockers, petites courses) pour maintenir le solde théorique exact lors du décompte du soir.
+          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+              Motif précis du retrait *
+            </label>
+            <input
+              type="text"
+              value={cashOutReason}
+              onChange={(e) => setCashOutReason(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] focus:outline-none focus:ring-2 focus:ring-[#115040]"
+              placeholder="Ex. Gasoil Groupe Électrogène, Dockers déchargement..."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Montant retiré (GNF) *
+              </label>
+              <input
+                type="number"
+                min={1000}
+                step={1000}
+                value={cashOutAmount}
+                onChange={(e) => setCashOutAmount(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] tabular-nums focus:outline-none focus:ring-2 focus:ring-[#115040]"
+                placeholder="Ex. 100000"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Bénéficiaire / Donné à
+              </label>
+              <input
+                type="text"
+                value={cashOutBeneficiary}
+                onChange={(e) => setCashOutBeneficiary(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] focus:outline-none focus:ring-2 focus:ring-[#115040]"
+                placeholder="Ex. Chauffeur, Dockers, Vendeur"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setCashOutOpen(false)}
+              className="px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={submittingCashOut}
+              className="px-5 py-2.5 rounded-xl bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-bold cursor-pointer disabled:opacity-50 shadow-xs"
+            >
+              {submittingCashOut ? "Enregistrement..." : "Confirmer la sortie de caisse"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </AppShell>
   );
 }

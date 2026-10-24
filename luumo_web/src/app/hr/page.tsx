@@ -20,6 +20,9 @@ import {
   Plus,
   Phone,
   Truck,
+  UserPlus,
+  Banknote,
+  ArrowDownRight,
 } from "lucide-react";
 
 const EXPENSE_CATEGORIES = [
@@ -28,6 +31,13 @@ const EXPENSE_CATEGORIES = [
   "Électricité EDG / Eau / Internet",
   "Transport & Livraisons",
   "Entretien Boutique & Dépôt",
+];
+
+const DEPARTMENTS = [
+  "Boutique & Caisse",
+  "Dépôt & Magasin",
+  "Transport & Livraisons",
+  "Direction & Comptabilité",
 ];
 
 export default function HrAndExpensesPage() {
@@ -42,7 +52,17 @@ export default function HrAndExpensesPage() {
   const [expCategory, setExpCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [expAmount, setExpAmount] = useState("480000");
   const [expEmployee, setExpEmployee] = useState<string>("");
+  const [expFromCash, setExpFromCash] = useState<boolean>(true);
   const [submittingExpense, setSubmittingExpense] = useState(false);
+
+  // Modal Nouveau Collaborateur
+  const [employeeOpen, setEmployeeOpen] = useState(false);
+  const [newEmpName, setNewEmpName] = useState("");
+  const [newEmpJobTitle, setNewEmpJobTitle] = useState("Caissière / Vendeuse");
+  const [newEmpPhone, setNewEmpPhone] = useState("+224 ");
+  const [newEmpDepartment, setNewEmpDepartment] = useState(DEPARTMENTS[0]);
+  const [newEmpWage, setNewEmpWage] = useState("1500000");
+  const [submittingEmployee, setSubmittingEmployee] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -81,8 +101,10 @@ export default function HrAndExpensesPage() {
         category: expCategory,
         employee: expEmployee || "Direction",
         total_amount: numericAmount,
+        from_cash: expFromCash,
       });
       setExpenseOpen(false);
+      setExpName("Gasoil Groupe Électrogène");
       await loadData();
     } catch (err) {
       setError(
@@ -95,13 +117,46 @@ export default function HrAndExpensesPage() {
     }
   };
 
-  const monthExpensesTotal = expenses.reduce((s, x) => s + x.total_amount, 0);
-  const monthlyPayrollTotal = employees.reduce((s, e) => s + e.monthly_wage, 0);
+  const handleCreateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmpName.trim()) return;
+
+    setSubmittingEmployee(true);
+    try {
+      await api.createEmployee({
+        name: newEmpName.trim(),
+        job_title: newEmpJobTitle.trim() || "Employé",
+        work_phone: newEmpPhone.trim(),
+        department: newEmpDepartment.trim() || "Boutique & Dépôt",
+        monthly_wage: Number(newEmpWage) || 0,
+      });
+      setEmployeeOpen(false);
+      setNewEmpName("");
+      setNewEmpPhone("+224 ");
+      setNewEmpWage("1500000");
+      await loadData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erreur lors de la création du collaborateur."
+      );
+    } finally {
+      setSubmittingEmployee(false);
+    }
+  };
+
+  const monthExpensesTotal = expenses.reduce((s, x) => s + (x.total_amount || 0), 0);
+  const monthlyPayrollTotal = employees.reduce((s, e) => s + (e.monthly_wage || 0), 0);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayCashOut = expenses
+    .filter((x) => x.date === todayStr && x.payment_mode !== "own_account")
+    .reduce((s, x) => s + (x.total_amount || 0), 0);
 
   return (
     <AppShell
       title="Équipe & Dépenses d'exploitation"
-      subtitle="Collaborateurs de la boutique et suivi rigoureux des charges quotidiennes (gasoil groupe électrogène, dockers, EDG)."
+      subtitle="Collaborateurs de la boutique, gestion des fiches d'équipe et sorties directes de caisse (gasoil, dockers, EDG)."
       actions={
         <div className="flex items-center gap-2.5 flex-wrap">
           <SmartButton
@@ -112,8 +167,16 @@ export default function HrAndExpensesPage() {
           />
           <button
             type="button"
+            onClick={() => setEmployeeOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white border border-[#DCE5E1] hover:border-[#115040] text-[#0B2920] text-xs sm:text-sm font-semibold shadow-xs cursor-pointer transition-colors"
+          >
+            <UserPlus className="w-4 h-4 text-[#115040]" />
+            <span>+ Nouveau collaborateur</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setExpenseOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs sm:text-sm font-semibold shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs sm:text-sm font-semibold shadow-xs cursor-pointer transition-colors"
           >
             <Plus className="w-4 h-4 text-[#F3BC33]" />
             <span>Enregistrer une dépense</span>
@@ -125,27 +188,34 @@ export default function HrAndExpensesPage() {
         {error && <ErrorBanner message={error} onRetry={loadData} />}
 
         {/* KPIs RH & Charges */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             tone="ink"
-            label="Dépenses d'exploitation (Mois)"
+            label="Charges d'exploitation (Mois)"
             value={formatGNF(monthExpensesTotal)}
-            sublabel="Gasoil groupe, manutention dockers, EDG & transport"
+            sublabel="Gasoil groupe, dockers, EDG & transport"
             icon={<Fuel className="w-5 h-5" />}
+          />
+          <KpiCard
+            tone="gold"
+            label="Sorties de caisse (Aujourd'hui)"
+            value={formatGNF(todayCashOut)}
+            sublabel="Espèces décaissées du tiroir-caisse"
+            icon={<Banknote className="w-5 h-5" />}
+          />
+          <KpiCard
+            tone="default"
+            label="Masse salariale mensuelle"
+            value={formatGNF(monthlyPayrollTotal)}
+            sublabel="Rémunérations fixes prévisionnelles"
+            icon={<Briefcase className="w-5 h-5" />}
           />
           <KpiCard
             tone="default"
             label="Effectif actif boutique & dépôt"
             value={`${employees.length} collaborateurs`}
-            sublabel="Caisse, magasin, livraison & comptabilité"
+            sublabel="Caisse, magasin, logistique & gérance"
             icon={<Users className="w-5 h-5" />}
-          />
-          <KpiCard
-            tone="gold"
-            label="Masse salariale mensuelle"
-            value={formatGNF(monthlyPayrollTotal)}
-            sublabel="Rémunérations fixes mensuelles en GNF"
-            icon={<Briefcase className="w-5 h-5" />}
           />
         </div>
 
@@ -158,7 +228,7 @@ export default function HrAndExpensesPage() {
                   Journal des dépenses opérationnelles
                 </h2>
                 <p className="text-xs text-[#526B63]">
-                  Suivez chaque sortie de caisse pour connaître votre bénéfice net réel.
+                  Suivez chaque sortie de caisse pour contrôler votre cash net physique.
                 </p>
               </div>
               <Receipt className="w-5 h-5 text-[#115040]" />
@@ -177,13 +247,23 @@ export default function HrAndExpensesPage() {
                 {expenses.map((exp) => (
                   <div
                     key={exp.id}
-                    className="p-4 sm:px-6 flex items-center justify-between gap-4 hover:bg-[#F7F9F8]"
+                    className="p-4 sm:px-6 flex items-center justify-between gap-4 hover:bg-[#F7F9F8] transition-colors"
                   >
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm text-[#0B2920]">
                           {exp.name}
                         </span>
+                        {exp.payment_mode !== "own_account" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            <Banknote className="w-3 h-3 text-amber-700" />
+                            <span>Sortie de Caisse</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            <span>Avancé par collaborateur</span>
+                          </span>
+                        )}
                         <StatusBadge
                           variant={
                             exp.state === "approved" || exp.state === "done"
@@ -198,7 +278,7 @@ export default function HrAndExpensesPage() {
                         />
                       </div>
                       <p className="text-xs text-[#526B63]">
-                        {exp.category} • Par{" "}
+                        {exp.category || "Charge d'exploitation"} • Par{" "}
                         <strong className="text-[#0B2920]">{exp.employee}</strong> •{" "}
                         {formatDate(exp.date)}
                       </p>
@@ -223,7 +303,14 @@ export default function HrAndExpensesPage() {
                   Personnel affecté aux ventes, au dépôt et aux livraisons.
                 </p>
               </div>
-              <Users className="w-5 h-5 text-[#115040]" />
+              <button
+                type="button"
+                onClick={() => setEmployeeOpen(true)}
+                title="Ajouter un collaborateur"
+                className="p-1.5 rounded-lg text-[#115040] hover:bg-[#EEF3F1] transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
 
             {loading ? (
@@ -235,7 +322,7 @@ export default function HrAndExpensesPage() {
                 {employees.map((emp) => (
                   <div
                     key={emp.id}
-                    className="p-4 sm:px-6 flex items-center justify-between gap-3 hover:bg-[#F7F9F8]"
+                    className="p-4 sm:px-6 flex items-center justify-between gap-3 hover:bg-[#F7F9F8] transition-colors"
                   >
                     <div className="min-w-0">
                       <p className="font-heading text-sm font-bold text-[#0B2920] truncate">
@@ -245,10 +332,13 @@ export default function HrAndExpensesPage() {
                         {emp.job_title} • <span className="text-[#526B63]">{emp.department}</span>
                       </p>
                       {emp.work_phone && (
-                        <p className="text-xs text-[#526B63] flex items-center gap-1 mt-0.5">
-                          <Phone className="w-3 h-3" />
+                        <a
+                          href={`tel:${emp.work_phone.replace(/\s+/g, "")}`}
+                          className="text-xs text-[#526B63] hover:text-[#115040] inline-flex items-center gap-1 mt-0.5"
+                        >
+                          <Phone className="w-3 h-3 text-[#115040]" />
                           <span>{emp.work_phone}</span>
-                        </p>
+                        </a>
                       )}
                     </div>
                     <div className="text-right shrink-0">
@@ -256,7 +346,7 @@ export default function HrAndExpensesPage() {
                         Salaire / mois
                       </span>
                       <span className="font-heading text-sm font-bold text-[#0B2920] tabular-nums">
-                        {formatGNF(emp.monthly_wage)}
+                        {formatGNF(emp.monthly_wage || 0)}
                       </span>
                     </div>
                   </div>
@@ -266,6 +356,106 @@ export default function HrAndExpensesPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Nouveau Collaborateur */}
+      <Modal
+        open={employeeOpen}
+        onClose={() => setEmployeeOpen(false)}
+        title="Créer une fiche collaborateur"
+      >
+        <form onSubmit={handleCreateEmployee} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+              Nom complet du collaborateur *
+            </label>
+            <input
+              type="text"
+              value={newEmpName}
+              onChange={(e) => setNewEmpName(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] focus:outline-none focus:ring-2 focus:ring-[#115040]"
+              placeholder="Ex. Fatoumata Binta Diallo"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Fonction / Poste
+              </label>
+              <input
+                type="text"
+                value={newEmpJobTitle}
+                onChange={(e) => setNewEmpJobTitle(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] focus:outline-none focus:ring-2 focus:ring-[#115040]"
+                placeholder="Ex. Caissière Principale"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Téléphone direct (Guinée)
+              </label>
+              <input
+                type="tel"
+                value={newEmpPhone}
+                onChange={(e) => setNewEmpPhone(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] focus:outline-none focus:ring-2 focus:ring-[#115040]"
+                placeholder="+224 620 00 00 00"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Département / Affectation
+              </label>
+              <select
+                value={newEmpDepartment}
+                onChange={(e) => setNewEmpDepartment(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] bg-white focus:outline-none focus:ring-2 focus:ring-[#115040]"
+              >
+                {DEPARTMENTS.map((dep) => (
+                  <option key={dep} value={dep}>
+                    {dep}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Salaire mensuel convenu (GNF)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={50000}
+                value={newEmpWage}
+                onChange={(e) => setNewEmpWage(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] tabular-nums focus:outline-none focus:ring-2 focus:ring-[#115040]"
+                placeholder="1500000"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setEmployeeOpen(false)}
+              className="px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={submittingEmployee}
+              className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+            >
+              {submittingEmployee ? "Enregistrement..." : "Créer le collaborateur"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal Nouvelle Dépense */}
       <Modal
@@ -293,7 +483,7 @@ export default function HrAndExpensesPage() {
 
           <div>
             <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
-              Motif précis de la dépense
+              Motif précis de la dépense *
             </label>
             <input
               type="text"
@@ -308,7 +498,7 @@ export default function HrAndExpensesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
-                Montant décaissé (GNF)
+                Montant décaissé (GNF) *
               </label>
               <input
                 type="number"
@@ -337,6 +527,25 @@ export default function HrAndExpensesPage() {
               </select>
             </div>
           </div>
+
+          {/* Option Décaissement direct tiroir-caisse */}
+          <label className="flex items-start gap-3 p-3 rounded-xl bg-[#F7F9F8] border border-[#DCE5E1] cursor-pointer hover:bg-[#EEF3F1] transition-colors">
+            <input
+              type="checkbox"
+              checked={expFromCash}
+              onChange={(e) => setExpFromCash(e.target.checked)}
+              className="mt-0.5 rounded text-[#115040] focus:ring-[#115040] w-4 h-4 cursor-pointer"
+            />
+            <div>
+              <span className="block text-xs font-bold text-[#0B2920] flex items-center gap-1.5">
+                <Banknote className="w-3.5 h-3.5 text-[#115040]" />
+                <span>Déduire directement du tiroir-caisse physique (Espèces)</span>
+              </span>
+              <span className="block text-[11px] text-[#526B63] mt-0.5">
+                Diminue immédiatement le solde d&apos;espèces théorique pour le comptage du soir.
+              </span>
+            </div>
+          </label>
 
           <div className="pt-2 flex items-center justify-end gap-2.5">
             <button

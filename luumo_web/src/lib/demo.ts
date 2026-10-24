@@ -4,6 +4,8 @@
  * lisent et modifient les mêmes objets en mémoire (logique 360° d'Odoo).
  */
 import type {
+  CreateEmployeeInput,
+  CreateExpenseInput,
   CreateOrderInput,
   Customer,
   CustomerDetail,
@@ -12,6 +14,7 @@ import type {
   Employee,
   Expense,
   GuineaQrProvider,
+  HrOverview,
   Order,
   PaymentIntent,
   PaymentMethod,
@@ -606,26 +609,51 @@ export const demo = {
   },
 
   // --- Équipe & Dépenses (hr + hr_expense) ---
-  async hrOverview(): Promise<{ employees: Employee[]; expenses: Expense[] }> {
+  async hrOverview(): Promise<HrOverview> {
     const s = db();
-    return delay({ employees: s.employees, expenses: s.expenses });
+    const totalMonth = s.expenses.reduce((acc, x) => acc + x.total_amount, 0);
+    const todayStr = isoDay(0);
+    const todayCash = s.expenses
+      .filter((x) => x.date === todayStr && x.payment_mode !== "own_account")
+      .reduce((acc, x) => acc + x.total_amount, 0);
+    const payroll = s.employees.reduce((acc, e) => acc + (e.monthly_wage || 0), 0);
+    return delay({
+      employees: s.employees,
+      expenses: s.expenses,
+      kpis: {
+        total_month_expenses: totalMonth,
+        today_cash_out: todayCash,
+        total_payroll: payroll,
+        employees_count: s.employees.length,
+      },
+    });
   },
 
-  async createExpense(input: {
-    name: string;
-    category: string;
-    employee: string;
-    total_amount: number;
-  }): Promise<Expense> {
+  async createEmployee(input: CreateEmployeeInput): Promise<Employee> {
+    const s = db();
+    const emp: Employee = {
+      id: s.employees.length + 10,
+      name: input.name,
+      job_title: input.job_title || "Employé",
+      work_phone: input.work_phone || "+224 ",
+      department: input.department || "Boutique & Dépôt",
+      monthly_wage: input.monthly_wage || 0,
+    };
+    s.employees.unshift(emp);
+    return delay(emp);
+  },
+
+  async createExpense(input: CreateExpenseInput): Promise<Expense> {
     const s = db();
     const exp: Expense = {
       id: s.expenses.length + 1,
       name: input.name,
-      category: input.category,
+      category: input.category || "Carburant / Groupe Électrogène",
       date: isoDay(0),
       employee: input.employee,
       total_amount: input.total_amount,
       state: "approved",
+      payment_mode: input.from_cash !== false ? "company_account" : "own_account",
     };
     s.expenses.unshift(exp);
     return delay(exp);

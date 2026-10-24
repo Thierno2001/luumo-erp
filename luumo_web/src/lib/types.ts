@@ -104,14 +104,42 @@ export type Employee = {
   monthly_wage: number;
 };
 
+export type CreateEmployeeInput = {
+  name: string;
+  job_title?: string;
+  work_phone?: string;
+  department?: string;
+  monthly_wage?: number;
+};
+
 export type Expense = {
   id: number;
   name: string;
-  category: string;
+  category?: string;
   date: string;
   employee: string;
   total_amount: number;
-  state: "approved" | "done" | "submitted";
+  state: "approved" | "done" | "submitted" | "draft";
+  payment_mode?: "company_account" | "own_account";
+};
+
+export type CreateExpenseInput = {
+  name: string;
+  category?: string;
+  employee: string;
+  total_amount: number;
+  from_cash?: boolean;
+};
+
+export type HrOverview = {
+  employees: Employee[];
+  expenses: Expense[];
+  kpis?: {
+    total_month_expenses: number;
+    today_cash_out: number;
+    total_payroll: number;
+    employees_count: number;
+  };
 };
 
 export type Vehicle = {

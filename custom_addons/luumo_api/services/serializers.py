@@ -83,12 +83,21 @@ def serialize_purchase(po):
 
 
 def serialize_employee(e):
+    wage = 0.0
+    if e.notes and 'WAGE:' in e.notes:
+        try:
+            for part in e.notes.split(';'):
+                if part.startswith('WAGE:'):
+                    wage = float(part.split(':')[1])
+        except Exception:
+            pass
     return {
         'id': e.id,
         'name': e.name,
         'job_title': e.job_title or 'Employé',
         'work_phone': e.work_phone or e.mobile_phone or '',
         'department': e.department_id.name or 'Boutique & Dépôt',
+        'monthly_wage': wage,
     }
 
 
@@ -100,6 +109,7 @@ def serialize_expense(ex):
         'employee': ex.employee_id.name,
         'total_amount': ex.total_amount,
         'state': ex.state,
+        'payment_mode': ex.payment_mode or 'company_account',
     }
 
 
