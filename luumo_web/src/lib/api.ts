@@ -11,6 +11,7 @@ import {
   validateVatNifOwasp,
 } from "./security";
 import type {
+  CompanyAppsResponse,
   CreateCustomerInput,
   CreateEmployeeInput,
   CreateExpenseInput,
@@ -58,7 +59,7 @@ export function readSession(): Session | null {
   }
 }
 
-function writeSession(session: Session | null) {
+export function writeSession(session: Session | null) {
   if (session) window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   else window.localStorage.removeItem(SESSION_KEY);
 }
@@ -155,6 +156,7 @@ export const api = {
       city,
       nif_rccm,
       password: input.password,
+      business_profile: input.business_profile || "retail",
     });
     const session: Session = { mode: "live", user: data.user, currency: data.currency };
     writeSession(session);
@@ -366,6 +368,16 @@ export const api = {
     return (
       await post<PaymentIntent>(`/payments/simulate-webhook/${encodeURIComponent(txRef)}`, {})
     ).data;
+  },
+
+  async getCompanyApps(): Promise<CompanyAppsResponse> {
+    if (isDemo()) return demo.getCompanyApps();
+    return (await get<CompanyAppsResponse>("/company/apps")).data;
+  },
+
+  async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
+    if (isDemo()) return demo.updateCompanyApps(enabled_apps);
+    return (await post<CompanyAppsResponse>("/company/apps", { enabled_apps })).data;
   },
 
   imageUrl(path: string | null) {

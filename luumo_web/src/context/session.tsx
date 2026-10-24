@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { api, readSession, type Session } from "@/lib/api";
+import { api, readSession, writeSession, type Session } from "@/lib/api";
 import type { RegisterCompanyInput } from "@/lib/types";
 
 type SessionContextValue = {
@@ -12,6 +12,7 @@ type SessionContextValue = {
   registerCompany: (input: RegisterCompanyInput) => Promise<void>;
   startDemo: () => void;
   logout: () => Promise<void>;
+  updateEnabledApps: (apps: string[]) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -63,9 +64,35 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
+  const updateEnabledApps = async (apps: string[]) => {
+    const res = await api.updateCompanyApps(apps);
+    if (session) {
+      const updated: Session = {
+        ...session,
+        user: {
+          ...session.user,
+          company: {
+            ...session.user.company,
+            enabled_apps: res.enabled_apps,
+          },
+        },
+      };
+      writeSession(updated);
+      setSession(updated);
+    }
+  };
+
   return (
     <SessionContext.Provider
-      value={{ session, ready, login, registerCompany, startDemo, logout }}
+      value={{
+        session,
+        ready,
+        login,
+        registerCompany,
+        startDemo,
+        logout,
+        updateEnabledApps,
+      }}
     >
       {children}
     </SessionContext.Provider>

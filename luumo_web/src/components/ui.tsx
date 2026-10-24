@@ -24,6 +24,7 @@ import {
   ArrowUpRight,
   Wifi,
   WifiOff,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { useOfflineSync } from "@/lib/offline-sync";
@@ -218,6 +219,21 @@ export const LUUMO_APPS: LuumoAppDefinition[] = [
 
 export function getActiveApp(pathname: string | null): LuumoAppDefinition {
   if (!pathname) return LUUMO_APPS[2];
+  if (pathname.startsWith("/apps")) {
+    return {
+      id: "apps",
+      name: "Mes Applications",
+      shortName: "Applications",
+      href: "/apps",
+      icon: SlidersHorizontal,
+      description: "Gestion des modules actifs de l'entreprise",
+      guineaUseCase: "Configuration",
+      odooModules: [],
+      iconBg: "bg-[#115040] border-[#0B382C]",
+      iconColor: "text-[#F3BC33]",
+      subMenus: [{ label: "Modules actifs", href: "/apps" }],
+    };
+  }
   const found = LUUMO_APPS.find((app) => pathname.startsWith(app.href));
   return found ?? LUUMO_APPS[2];
 }
@@ -606,6 +622,15 @@ export function AppShell({
                 {session.user.company.name}
               </span>
             </div>
+
+            <Link
+              href="/apps"
+              title="Gérer mes applications actives"
+              aria-label="Gérer mes applications actives"
+              className="p-2 rounded-lg text-emerald-100 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-[#F3BC33]" />
+            </Link>
 
             <div className="flex items-center gap-2 pl-2 border-l border-white/15">
               <span className="hidden sm:inline text-xs font-medium text-emerald-100">

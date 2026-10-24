@@ -4,6 +4,7 @@
  * lisent et modifient les mêmes objets en mémoire (logique 360° d'Odoo).
  */
 import type {
+  CompanyAppsResponse,
   CreateEmployeeInput,
   CreateExpenseInput,
   CreateOrderInput,
@@ -31,7 +32,20 @@ export const DEMO_USER: User = {
   id: 2,
   name: "Mamadou Diallo",
   login: "mamadou@luumo.gn",
-  company: { id: 1, name: "Diallo & Fils — Madina" },
+  company: {
+    id: 1,
+    name: "Diallo & Fils — Madina",
+    enabled_apps: [
+      "pos",
+      "orders",
+      "dashboard",
+      "inventory",
+      "purchases",
+      "customers",
+      "hr",
+      "fleet",
+    ],
+  },
 };
 
 export const DEMO_CURRENCY = {
@@ -788,6 +802,53 @@ export const demo = {
     intent.operator_tx_id = `${prefix}${stamp}.${rand}`;
     intent.confirmed_at = Math.floor(Date.now() / 1000);
     return delay(intent, 150);
+  },
+
+  // --- Gestion modulaire des applications (Niveaux 1 & 2) ---
+  async getCompanyApps(): Promise<CompanyAppsResponse> {
+    const apps = DEMO_USER.company.enabled_apps ?? [
+      "pos",
+      "orders",
+      "dashboard",
+      "inventory",
+      "purchases",
+      "customers",
+      "hr",
+      "fleet",
+    ];
+    return delay({
+      enabled_apps: apps,
+      all_apps: [
+        "pos",
+        "orders",
+        "dashboard",
+        "inventory",
+        "purchases",
+        "customers",
+        "hr",
+        "fleet",
+      ],
+    });
+  },
+
+  async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
+    const valid = enabled_apps.includes("dashboard")
+      ? enabled_apps
+      : [...enabled_apps, "dashboard"];
+    DEMO_USER.company.enabled_apps = valid;
+    return delay({
+      enabled_apps: valid,
+      all_apps: [
+        "pos",
+        "orders",
+        "dashboard",
+        "inventory",
+        "purchases",
+        "customers",
+        "hr",
+        "fleet",
+      ],
+    });
   },
 };
 

@@ -5,11 +5,18 @@ export type Currency = {
   position: "before" | "after";
 };
 
+export type BusinessProfile = "retail" | "wholesale" | "services";
+
+export type CompanyAppsResponse = {
+  enabled_apps: string[];
+  all_apps: string[];
+};
+
 export type User = {
   id: number;
   name: string;
   login: string;
-  company: { id: number; name: string };
+  company: { id: number; name: string; enabled_apps?: string[] };
 };
 
 export type Product = {
@@ -59,6 +66,7 @@ export type RegisterCompanyInput = {
   nif_rccm?: string;
   password: string;
   mode?: "live" | "demo";
+  business_profile?: BusinessProfile;
 };
 
 export type PaymentState = "paid" | "in_payment" | "partial" | "not_paid" | "not_invoiced";

@@ -4,6 +4,8 @@ import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Building2,
+  Store,
+  Briefcase,
   User as UserIcon,
   Mail,
   Phone,
@@ -18,11 +20,13 @@ import {
 import { useSession } from "@/context/session";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
 import { evaluatePasswordOwasp } from "@/lib/security";
+import type { BusinessProfile } from "@/lib/types";
 
 export default function RegisterCompanyPage() {
   const { registerCompany } = useSession();
 
   const [companyName, setCompanyName] = useState("");
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>("retail");
   const [city, setCity] = useState("Conakry");
   const [phone, setPhone] = useState("+224 ");
   const [adminName, setAdminName] = useState("");
@@ -66,6 +70,7 @@ export default function RegisterCompanyPage() {
         phone,
         city,
         password,
+        business_profile: businessProfile,
       });
     } catch (err) {
       setError(
@@ -128,6 +133,80 @@ export default function RegisterCompanyPage() {
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#DCE5E1] bg-[#F7F9F8] text-sm text-[#0B2920] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#115040]"
                 />
               </div>
+            </div>
+
+            {/* Niveau 1 : Profil métier & sélection modulaire */}
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Profil métier & Applications initiales
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setBusinessProfile("retail")}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    businessProfile === "retail"
+                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
+                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Store className="w-4 h-4 text-[#115040]" />
+                    {businessProfile === "retail" && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-[#0B2920]">Boutique & Caisse</div>
+                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
+                    Détail, superette, pharmacie (4 apps)
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBusinessProfile("wholesale")}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    businessProfile === "wholesale"
+                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
+                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Building2 className="w-4 h-4 text-[#115040]" />
+                    {businessProfile === "wholesale" && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-[#0B2920]">Grossiste & Import</div>
+                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
+                    Madina, dépôt, camions (8 apps)
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBusinessProfile("services")}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    businessProfile === "services"
+                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
+                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Briefcase className="w-4 h-4 text-[#115040]" />
+                    {businessProfile === "services" && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-[#0B2920]">Prestations & B2B</div>
+                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
+                    Services, transit, agence (4 apps)
+                  </div>
+                </button>
+              </div>
+              <p className="text-[11px] text-[#526B63] mt-1.5">
+                Vous pourrez activer ou masquer d&apos;autres applications à tout moment dans vos paramètres.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
