@@ -95,7 +95,14 @@ def ensure_company_infrastructure(env, company=None, user=None):
             'company_id': False,
         })
 
-    # 6. Droits opérationnels universels pour l'utilisateur
+    # 6. États Flotte universels (Opérationnel & Au garage)
+    State = su_env['fleet.vehicle.state']
+    if not State.search([('name', '=ilike', 'Opérationnel')], limit=1):
+        State.create({'name': 'Opérationnel', 'sequence': 1})
+    if not State.search([('name', '=ilike', 'Au garage')], limit=1):
+        State.create({'name': 'Au garage', 'sequence': 2})
+
+    # 7. Droits opérationnels universels pour l'utilisateur
     target_user = user or (env.user if env.user.id != SUPERUSER_ID else None)
     if target_user and target_user.id != SUPERUSER_ID:
         internal_group = su_env.ref('base.group_user', raise_if_not_found=False)

@@ -145,13 +145,36 @@ export type HrOverview = {
 export type Vehicle = {
   id: number;
   name: string;
-  vehicle_type: "Camion" | "Tricycle (Bombonne)" | "Fourgonnette" | "Moto";
+  vehicle_type: "Camion" | "Tricycle (Bombonne)" | "Fourgonnette" | "Moto" | string;
   license_plate: string;
   driver: string;
   route: string;
   odometer: number;
   monthly_fuel: number;
-  status: "En tournée" | "Disponible" | "Entretien";
+  status: "Opérationnel" | "En tournée" | "Disponible" | "Entretien";
+};
+
+export type CreateVehicleInput = {
+  name: string;
+  vehicle_type: string;
+  license_plate: string;
+  driver: string;
+  route: string;
+  monthly_fuel?: number;
+  initial_odometer?: number;
+};
+
+export type RecordRepairInput = {
+  reason: string;
+  garage?: string;
+  amount: number;
+  odometer?: number;
+  from_cash?: boolean;
+};
+
+export type RecordRepairResponse = {
+  vehicle: Vehicle;
+  service_id: number;
 };
 
 export type CustomerPayment = {

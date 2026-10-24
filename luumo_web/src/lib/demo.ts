@@ -7,6 +7,7 @@ import type {
   CreateEmployeeInput,
   CreateExpenseInput,
   CreateOrderInput,
+  CreateVehicleInput,
   Customer,
   CustomerDetail,
   CustomerPayment,
@@ -20,6 +21,8 @@ import type {
   PaymentMethod,
   Product,
   PurchaseOrder,
+  RecordRepairInput,
+  RecordRepairResponse,
   User,
   Vehicle,
 } from "./types";
@@ -664,13 +667,7 @@ export const demo = {
     return delay(db().vehicles);
   },
 
-  async createVehicle(input: {
-    name: string;
-    vehicle_type: Vehicle["vehicle_type"];
-    license_plate: string;
-    driver: string;
-    route: string;
-  }): Promise<Vehicle> {
+  async createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
     const s = db();
     const v: Vehicle = {
       id: s.vehicles.length + 1,
@@ -679,12 +676,44 @@ export const demo = {
       license_plate: input.license_plate,
       driver: input.driver,
       route: input.route,
-      odometer: 0,
-      monthly_fuel: 0,
-      status: "Disponible",
+      odometer: input.initial_odometer ?? 0,
+      monthly_fuel: input.monthly_fuel ?? 0,
+      status: "Opérationnel",
     };
     s.vehicles.push(v);
     return delay(v);
+  },
+
+  async toggleVehicleStatus(vehicleId: number): Promise<Vehicle> {
+    const s = db();
+    const v = s.vehicles.find((veh) => veh.id === vehicleId);
+    if (!v) throw new Error("Véhicule introuvable");
+    v.status = v.status === "Entretien" ? "Opérationnel" : "Entretien";
+    return delay(v);
+  },
+
+  async recordRepair(vehicleId: number, input: RecordRepairInput): Promise<RecordRepairResponse> {
+    const s = db();
+    const v = s.vehicles.find((veh) => veh.id === vehicleId);
+    if (!v) throw new Error("Véhicule introuvable");
+    if (input.odometer && input.odometer > 0) {
+      v.odometer = input.odometer;
+    }
+    v.status = "Opérationnel";
+    if (input.from_cash !== false) {
+      const exp: Expense = {
+        id: s.expenses.length + 1,
+        name: `Entretien ${v.license_plate} : ${input.reason}`,
+        category: "Entretien Véhicules & Flotte",
+        date: isoDay(0),
+        employee: v.driver || "Chauffeur Flotte",
+        total_amount: input.amount,
+        state: "done",
+        payment_mode: "company_account",
+      };
+      s.expenses.unshift(exp);
+    }
+    return delay({ vehicle: v, service_id: Math.floor(Math.random() * 1000) + 1 });
   },
 
   // --- Passerelle B2B Mobile Money & Webhook ---

@@ -15,6 +15,7 @@ import type {
   CreateEmployeeInput,
   CreateExpenseInput,
   CreateOrderInput,
+  CreateVehicleInput,
   Currency,
   Customer,
   CustomerDetail,
@@ -29,6 +30,8 @@ import type {
   PaymentMethod,
   Product,
   PurchaseOrder,
+  RecordRepairInput,
+  RecordRepairResponse,
   RegisterCompanyInput,
   User,
   Vehicle,
@@ -329,15 +332,19 @@ export const api = {
     return (await get<Vehicle[]>("/fleet/vehicles")).data;
   },
 
-  async createVehicle(input: {
-    name: string;
-    vehicle_type: Vehicle["vehicle_type"];
-    license_plate: string;
-    driver: string;
-    route: string;
-  }): Promise<Vehicle> {
+  async createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
     if (isDemo()) return demo.createVehicle(input);
     return (await post<Vehicle>("/fleet/vehicles/create", input)).data;
+  },
+
+  async toggleVehicleStatus(id: number): Promise<Vehicle> {
+    if (isDemo()) return demo.toggleVehicleStatus(id);
+    return (await post<Vehicle>(`/fleet/vehicles/${id}/toggle-status`, {})).data;
+  },
+
+  async recordRepair(id: number, input: RecordRepairInput): Promise<RecordRepairResponse> {
+    if (isDemo()) return demo.recordRepair(id, input);
+    return (await post<RecordRepairResponse>(`/fleet/vehicles/${id}/repair`, input)).data;
   },
 
   async initiatePayment(input: {

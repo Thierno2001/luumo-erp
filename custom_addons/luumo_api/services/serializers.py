@@ -114,10 +114,29 @@ def serialize_expense(ex):
 
 
 def serialize_vehicle(v):
+    meta = {}
+    if v.description:
+        try:
+            import json
+            raw_desc = v.description
+            if '{' in raw_desc and '}' in raw_desc:
+                start = raw_desc.find('{')
+                end = raw_desc.rfind('}') + 1
+                meta = json.loads(raw_desc[start:end])
+        except Exception:
+            pass
+
+    state_name = v.state_id.name if v.state_id else 'Opérationnel'
+    status = "Entretien" if 'garage' in state_name.lower() or 'entretien' in state_name.lower() else "Opérationnel"
+
     return {
         'id': v.id,
         'name': v.name,
         'license_plate': v.license_plate or '',
         'driver': v.driver_id.name or 'Non assigné',
-        'odometer': v.odometer,
+        'odometer': round(v.odometer or 0.0),
+        'route': v.location or meta.get('route') or 'Conakry',
+        'vehicle_type': meta.get('vehicle_type') or 'Camion',
+        'monthly_fuel': float(meta.get('monthly_fuel') or 0.0),
+        'status': status,
     }
