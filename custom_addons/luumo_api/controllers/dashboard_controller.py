@@ -37,7 +37,7 @@ class LuumoDashboardController(LuumoBaseController):
             month_total, month_count = month_groups[0] if month_groups else (0.0, 0)
 
             daily = dict(
-                (getattr(day, 'date', lambda d=day: d)(), total or 0.0)
+                (day.date() if hasattr(day, 'date') else day, total or 0.0)
                 for day, total in SaleOrder._read_group(
                     confirmed + [('date_order', '>=', week_start)],
                     groupby=['date_order:day'],
@@ -46,7 +46,9 @@ class LuumoDashboardController(LuumoBaseController):
             )
             series = []
             for i in range(7):
-                d = (week_start + timedelta(days=i)).date()
+                d = week_start + timedelta(days=i)
+                if hasattr(d, 'date'):
+                    d = d.date()
                 series.append({'date': d.isoformat(), 'total': daily.get(d, 0.0)})
 
             receivable_groups = env['account.move']._read_group(
@@ -68,10 +70,10 @@ class LuumoDashboardController(LuumoBaseController):
 
             return self._ok({
                 'kpis': {
-                    'sales_today': today_total,
-                    'orders_today': today_count,
-                    'sales_month': month_total,
-                    'orders_month': month_count,
+                    'sales_today': today_total or 0.0,
+                    'orders_today': today_count or 0,
+                    'sales_month': month_total or 0.0,
+                    'orders_month': month_count or 0,
                     'receivables': receivable_total or 0.0,
                     'debtors': debtor_count or 0,
                     'low_stock_count': len(low_stock),

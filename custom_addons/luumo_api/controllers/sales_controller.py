@@ -126,7 +126,12 @@ class LuumoSalesController(LuumoBaseController):
         """
         def _do():
             payload = self._payload()
-            orders_to_sync = payload.get('orders') or []
+            if isinstance(payload, list):
+                orders_to_sync = payload
+            elif isinstance(payload, dict):
+                orders_to_sync = payload.get('orders') or []
+            else:
+                orders_to_sync = []
             if not isinstance(orders_to_sync, list):
                 return self._error("Le paramètre 'orders' doit être une liste.", 400)
 
