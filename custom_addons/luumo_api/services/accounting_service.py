@@ -5,7 +5,29 @@ Services Métier Transverses : Comptabilité, Stock & Partenaires
 Centralise les opérations transactionnelles partagées entre la Caisse (POS),
 le Carnet de Dettes, l'Inventaire, les Achats et les Webhooks Mobile Money.
 """
+import re
 from odoo.exceptions import UserError
+
+
+def ensure_company_warehouse(env, company=None):
+    """Garantit qu'un entrepôt principal existe pour la société (requis par Odoo sale_stock)."""
+    comp = company or env.company
+    Warehouse = env['stock.warehouse'].sudo()
+    wh = Warehouse.search([('company_id', '=', comp.id)], limit=1)
+    if not wh:
+        base_code = re.sub(r'[^A-Z0-9]', '', (comp.name or 'WH').upper())[:5] or f"W{comp.id}"[:5]
+        code = base_code
+        suffix = 1
+        while Warehouse.search([('code', '=', code)], limit=1):
+            code = f"{base_code[:3]}{suffix}"
+            suffix += 1
+        wh = Warehouse.create({
+            'name': f"Dépôt Principal — {comp.name}",
+            'code': code,
+            'company_id': comp.id,
+            'partner_id': comp.partner_id.id,
+        })
+    return wh
 
 
 def get_payment_journal(env, method):
@@ -56,11 +78,7 @@ def validate_picking_delivery(order_or_po):
 
 def set_product_stock(env, product, qty):
     """Ajuste le stock physique disponible dans l'entrepôt principal de la société active."""
-    warehouse = env['stock.warehouse'].search(
-        [('company_id', '=', env.company.id)], limit=1
-    )
-    if not warehouse:
-        raise UserError("Aucun entrepôt configuré pour cette entreprise.")
+    warehouse = ensure_company_warehouse(env, env.company)
     env['stock.quant'].with_context(inventory_mode=True).create({
         'product_id': product.id,
         'location_id': warehouse.lot_stock_id.id,

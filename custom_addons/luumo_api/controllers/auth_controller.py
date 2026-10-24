@@ -9,6 +9,7 @@ from odoo import SUPERUSER_ID
 from odoo.exceptions import AccessDenied, ValidationError
 from odoo.http import request, root
 
+from ..services.accounting_service import ensure_company_warehouse
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import (
     check_rate_limit,
@@ -139,6 +140,7 @@ class LuumoAuthController(LuumoBaseController):
                 if currency_gnf:
                     company_vals['currency_id'] = currency_gnf.id
                 company = su_env['res.company'].create(company_vals)
+                ensure_company_warehouse(su_env, company)
 
                 group_xmlids = [
                     'base.group_user',

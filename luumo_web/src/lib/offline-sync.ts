@@ -79,6 +79,12 @@ class OfflineSyncManager {
     return this.getPendingOrders().length;
   }
 
+  public clearPendingOrders() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(STORAGE_KEYS.PENDING_ORDERS);
+    this.notify();
+  }
+
   public cacheCatalog(products: Product[]) {
     if (typeof window === "undefined" || !products?.length) return;
     try {
@@ -259,8 +265,13 @@ export function useOfflineSync() {
     return await offlineSyncManager.syncPendingOrders();
   };
 
+  const clearPending = () => {
+    offlineSyncManager.clearPendingOrders();
+  };
+
   return {
     ...state,
     triggerSync,
+    clearPending,
   };
 }

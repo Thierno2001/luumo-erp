@@ -450,12 +450,12 @@ export function ErrorBanner({
  * Badge de connectivité et de synchronisation pour le mode Hybride B2B
  */
 export function NetworkSyncBadge() {
-  const { isOnline, pendingCount, isSyncing, triggerSync } = useOfflineSync();
+  const { isOnline, pendingCount, isSyncing, triggerSync, clearPending } = useOfflineSync();
 
   if (isOnline && pendingCount === 0) {
     return (
       <span
-        title="Connecté au serveur Cloud Luumo (Toutes les ventes sont synchronisées)"
+        title="Connecté au serveur Luumo (Toutes les ventes sont synchronisées)"
         className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-100 text-[11px] font-medium border border-emerald-400/30"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -465,30 +465,46 @@ export function NetworkSyncBadge() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => triggerSync()}
-      disabled={isSyncing}
-      title={
-        !isOnline
-          ? `Mode Hors-Ligne actif : ${pendingCount} vente(s) enregistrée(s) localement`
-          : `${pendingCount} vente(s) hors-ligne prêtes à être synchronisées. Cliquez pour synchroniser maintenant.`
-      }
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FEF6DF] text-[#8F5E00] hover:bg-[#F3BC33] hover:text-[#0B2920] text-[11px] font-semibold border border-[#F3BC33]/60 transition-all cursor-pointer shadow-sm animate-pulse"
-    >
-      {!isOnline ? (
-        <WifiOff className="w-3.5 h-3.5 text-[#C2410C]" />
-      ) : (
-        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+    <div className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => triggerSync()}
+        disabled={isSyncing}
+        title={
+          !isOnline
+            ? `Mode Hors-Ligne actif : ${pendingCount} vente(s) enregistrée(s) localement`
+            : `${pendingCount} vente(s) hors-ligne prêtes à être synchronisées. Cliquez pour synchroniser maintenant.`
+        }
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FEF6DF] text-[#8F5E00] hover:bg-[#F3BC33] hover:text-[#0B2920] text-[11px] font-semibold border border-[#F3BC33]/60 transition-all cursor-pointer shadow-sm animate-pulse"
+      >
+        {!isOnline ? (
+          <WifiOff className="w-3.5 h-3.5 text-[#C2410C]" />
+        ) : (
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+        )}
+        <span>
+          {isSyncing
+            ? "Synchronisation..."
+            : !isOnline
+              ? `Hors-ligne (${pendingCount})`
+              : `Sync (${pendingCount})`}
+        </span>
+      </button>
+      {pendingCount > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("Voulez-vous réinitialiser et vider la file locale d'attente ?")) {
+              clearPending();
+            }
+          }}
+          title="Vider la file d'attente locale"
+          className="p-1 text-slate-300 hover:text-red-300 hover:bg-white/10 rounded transition-colors text-xs cursor-pointer"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       )}
-      <span>
-        {isSyncing
-          ? "Synchronisation..."
-          : !isOnline
-            ? `Hors-ligne (${pendingCount})`
-            : `Sync (${pendingCount})`}
-      </span>
-    </button>
+    </div>
   );
 }
 

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { AppShell, ErrorBanner, Modal, StockBadge } from "@/components/ui";
 import { QrCodeVisual, QrPaymentModal } from "@/components/qr-payment";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { formatDateTime, formatGNF } from "@/lib/format";
 import { offlineSyncManager, useOfflineSync } from "@/lib/offline-sync";
 import type { Customer, Order, PaymentMethod, Product } from "@/lib/types";
@@ -222,39 +222,50 @@ export default function PosPage() {
       setPayment("cash");
       await loadData();
     } catch (err) {
-      // Coupure de réseau pendant l'envoi : bascule automatique sur la file hors-ligne
-      console.warn("Échec réseau lors de la vente, bascule hors-ligne :", err);
-      const offlineOrder = offlineSyncManager.queueOfflineOrder({
-        partner_id: partnerId,
-        partner_name: partnerName,
-        payment,
-        lines: cart.map((item) => ({
-          product_id: item.product.id,
-          name: item.product.name,
-          qty: item.qty,
-          price_unit: item.price_unit,
-        })),
-      });
+      const isNetworkError =
+        !offlineSyncManager.isOnline() ||
+        (err instanceof ApiError && (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504)) ||
+        (err instanceof TypeError && err.message.toLowerCase().includes("fetch"));
 
-      const mockOrder: Order = {
-        id: Math.floor(Math.random() * 1000) + 9000,
-        name: offlineOrder.offline_uuid,
-        date: offlineOrder.created_at,
-        partner: { id: partnerId ?? 0, name: partnerName },
-        state: "sale",
-        amount_total: offlineOrder.amount_total,
-        amount_untaxed: offlineOrder.amount_total,
-        invoice_status: "invoiced",
-        payment_state: payment === "credit" ? "not_paid" : "paid",
-        lines: offlineOrder.lines,
-      };
+      if (isNetworkError) {
+        // Coupure de réseau pendant l'envoi : bascule automatique sur la file hors-ligne
+        console.warn("Échec réseau lors de la vente, bascule hors-ligne :", err);
+        const offlineOrder = offlineSyncManager.queueOfflineOrder({
+          partner_id: partnerId,
+          partner_name: partnerName,
+          payment,
+          lines: cart.map((item) => ({
+            product_id: item.product.id,
+            name: item.product.name,
+            qty: item.qty,
+            price_unit: item.price_unit,
+          })),
+        });
 
-      setLastQrRef(qrRef ?? null);
-      setQrModalOpen(false);
-      setCompletedOrder(mockOrder);
-      setCart([]);
-      setPartnerId(null);
-      setPayment("cash");
+        const mockOrder: Order = {
+          id: Math.floor(Math.random() * 1000) + 9000,
+          name: offlineOrder.offline_uuid,
+          date: offlineOrder.created_at,
+          partner: { id: partnerId ?? 0, name: partnerName },
+          state: "sale",
+          amount_total: offlineOrder.amount_total,
+          amount_untaxed: offlineOrder.amount_total,
+          invoice_status: "invoiced",
+          payment_state: payment === "credit" ? "not_paid" : "paid",
+          lines: offlineOrder.lines,
+        };
+
+        setLastQrRef(qrRef ?? null);
+        setQrModalOpen(false);
+        setCompletedOrder(mockOrder);
+        setCart([]);
+        setPartnerId(null);
+        setPayment("cash");
+      } else {
+        // Vrai problème applicatif ou de validation serveur
+        console.error("Erreur serveur lors de la vente :", err);
+        setError(err instanceof Error ? err.message : "Erreur lors de la validation de la vente");
+      }
     } finally {
       setSubmitting(false);
     }
