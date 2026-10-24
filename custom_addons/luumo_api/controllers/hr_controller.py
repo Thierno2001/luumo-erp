@@ -7,6 +7,7 @@ from odoo import fields
 from odoo.exceptions import ValidationError
 from odoo.http import request
 
+from ..services.accounting_service import ensure_company_infrastructure
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import clean_text
 from ..services.serializers import serialize_employee, serialize_expense
@@ -18,6 +19,7 @@ class LuumoHrController(LuumoBaseController):
     def hr_overview(self):
         def _do():
             env = request.env
+            ensure_company_infrastructure(env, env.company)
             today = fields.Date.context_today(env.user)
             month_start = today.replace(day=1)
 
@@ -112,6 +114,7 @@ class LuumoHrController(LuumoBaseController):
             from_cash = bool(p.get('from_cash', True))
 
             env = request.env
+            ensure_company_infrastructure(env, env.company)
             Employee = env['hr.employee'].sudo()
             employee = Employee.search([
                 ('name', '=ilike', emp_name),

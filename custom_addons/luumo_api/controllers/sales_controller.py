@@ -9,6 +9,7 @@ from odoo.exceptions import ValidationError
 from odoo.http import request
 
 from ..services.accounting_service import (
+    ensure_company_infrastructure,
     ensure_company_warehouse,
     get_or_create_walkin_partner,
     get_payment_journal,
@@ -42,8 +43,8 @@ class LuumoSalesController(LuumoBaseController):
                 _logger.info("Commande déjà synchronisée (idempotence) : %s (ID %s)", ref, existing.id)
                 return existing
 
-        # Garantit que la société possède son entrepôt de stockage (requis par Odoo sale_stock)
-        ensure_company_warehouse(request.env, request.env.company)
+        # Garantit de façon universelle que la société possède son infrastructure ERP complète
+        ensure_company_infrastructure(request.env, request.env.company)
 
         lines = p.get('lines') or []
         if not lines:

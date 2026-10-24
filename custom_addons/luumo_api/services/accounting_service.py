@@ -6,6 +6,7 @@ Centralise les opérations transactionnelles partagées entre la Caisse (POS),
 le Carnet de Dettes, l'Inventaire, les Achats et les Webhooks Mobile Money.
 """
 import re
+from odoo import SUPERUSER_ID
 from odoo.exceptions import UserError
 
 
@@ -30,19 +31,125 @@ def ensure_company_warehouse(env, company=None):
     return wh
 
 
+def ensure_company_infrastructure(env, company=None, user=None):
+    """Garantit de façon universelle et automatique que TOUTE entreprise
+    (existante ou nouvellement enregistrée) dispose de l'infrastructure ERP indispensable :
+    1. Entrepôt principal de stockage (requis par sale_stock pour valider les ventes).
+    2. Partenaire 'Client comptoir' dédié (requis pour les ventes comptoir POS).
+    3. Journaux comptables de paiement (Espèces & Banque/Mobile Money).
+    4. Collaborateur par défaut de l'entreprise (requis pour les dépenses/sorties de caisse).
+    5. Droits opérationnels universels pour tout utilisateur de l'entreprise (Vente, Stock, Achat, Caisse, RH, Frais, Flotte).
+    """
+    su_env = env(user=SUPERUSER_ID)
+    comp = company or env.company
+    if not comp:
+        return
+
+    # 1. Entrepôt principal de stockage
+    ensure_company_warehouse(su_env, comp)
+
+    # 2. Client comptoir dédié
+    get_or_create_walkin_partner(su_env)
+
+    # 3. Journaux de paiement (Caisse & Banque)
+    Journal = su_env['account.journal']
+    comp_domain = [('company_id', '=', comp.id)]
+    cash_j = Journal.search(comp_domain + [('type', '=', 'cash')], limit=1)
+    if not cash_j:
+        base_code = re.sub(r'[^A-Z0-9]', '', (comp.name or 'CSH').upper())[:3] or 'CSH'
+        Journal.create({
+            'name': f"Caisse — {comp.name}",
+            'type': 'cash',
+            'code': f"C{base_code[:3]}"[:5],
+            'company_id': comp.id,
+        })
+
+    bank_j = Journal.search(comp_domain + [('type', '=', 'bank')], limit=1)
+    if not bank_j:
+        base_code = re.sub(r'[^A-Z0-9]', '', (comp.name or 'BNK').upper())[:3] or 'BNK'
+        Journal.create({
+            'name': f"Banque / Mobile Money — {comp.name}",
+            'type': 'bank',
+            'code': f"B{base_code[:3]}"[:5],
+            'company_id': comp.id,
+        })
+
+    # 4. Collaborateur par défaut pour l'entreprise
+    Employee = su_env['hr.employee']
+    if not Employee.search([('company_id', '=', comp.id)], limit=1):
+        Employee.create({
+            'name': 'Direction',
+            'job_title': 'Gérant de boutique',
+            'company_id': comp.id,
+        })
+
+    # 5. Article de Frais universel
+    Product = su_env['product.product']
+    if not Product.search([('can_be_expensed', '=', True)], limit=1):
+        Product.create({
+            'name': 'Frais de fonctionnement Luumo',
+            'can_be_expensed': True,
+            'sale_ok': False,
+            'purchase_ok': True,
+            'type': 'service',
+            'company_id': False,
+        })
+
+    # 6. Droits opérationnels universels pour l'utilisateur
+    target_user = user or (env.user if env.user.id != SUPERUSER_ID else None)
+    if target_user and target_user.id != SUPERUSER_ID:
+        internal_group = su_env.ref('base.group_user', raise_if_not_found=False)
+        # S'applique uniquement aux utilisateurs internes (non portail)
+        if internal_group and internal_group.id in target_user.groups_id.ids:
+            luumo_roles = [
+                'base.group_user',
+                'sales_team.group_sale_manager',
+                'stock.group_stock_manager',
+                'purchase.group_purchase_manager',
+                'account.group_account_invoice',
+                'hr.group_hr_user',
+                'hr_expense.group_hr_expense_user',
+                'hr_expense.group_hr_expense_manager',
+                'fleet.fleet_group_manager',
+            ]
+            needed_groups = []
+            for xmlid in luumo_roles:
+                grp = su_env.ref(xmlid, raise_if_not_found=False)
+                if grp and grp.id not in target_user.groups_id.ids:
+                    needed_groups.append((4, grp.id))
+            if needed_groups:
+                target_user.sudo().write({'groups_id': needed_groups})
+
+
 def get_payment_journal(env, method):
     """Retourne le journal comptable correspondant au mode de paiement :
     - ``cash`` -> Journal Espèces
     - ``mobile_money`` / ``bank`` -> Journal Banque / Mobile Money
+    Garantit l'auto-création si manquant pour éviter tout blocage.
     """
-    Journal = env['account.journal']
-    company_domain = [('company_id', '=', env.company.id)]
+    Journal = env['account.journal'].sudo()
+    comp = env.company
+    company_domain = [('company_id', '=', comp.id)]
     if method == 'cash':
         journal = Journal.search(company_domain + [('type', '=', 'cash')], limit=1)
+        if not journal:
+            base_code = re.sub(r'[^A-Z0-9]', '', (comp.name or 'CSH').upper())[:3] or 'CSH'
+            journal = Journal.create({
+                'name': f"Caisse — {comp.name}",
+                'type': 'cash',
+                'code': f"C{base_code[:3]}"[:5],
+                'company_id': comp.id,
+            })
     else:
         journal = Journal.search(company_domain + [('type', '=', 'bank')], limit=1)
-    if not journal:
-        raise UserError("Aucun journal de paiement configuré (Espèces / Banque).")
+        if not journal:
+            base_code = re.sub(r'[^A-Z0-9]', '', (comp.name or 'BNK').upper())[:3] or 'BNK'
+            journal = Journal.create({
+                'name': f"Banque / Mobile Money — {comp.name}",
+                'type': 'bank',
+                'code': f"B{base_code[:3]}"[:5],
+                'company_id': comp.id,
+            })
     return journal
 
 
@@ -83,6 +190,7 @@ def set_product_stock(env, product, qty):
         'product_id': product.id,
         'location_id': warehouse.lot_stock_id.id,
         'inventory_quantity': max(0.0, qty),
+        'company_id': env.company.id,
     }).action_apply_inventory()
 
 

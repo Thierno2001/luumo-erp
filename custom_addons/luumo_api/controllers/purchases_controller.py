@@ -5,7 +5,7 @@ Contrôleur Achats, Importations & Réceptions Fournisseurs
 """
 from odoo.http import request
 
-from ..services.accounting_service import validate_picking_delivery
+from ..services.accounting_service import ensure_company_infrastructure, validate_picking_delivery
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import clean_text
 from ..services.serializers import serialize_purchase
@@ -33,6 +33,7 @@ class LuumoPurchasesController(LuumoBaseController):
     @luumo_route('/purchases/create', ['POST'])
     def create_purchase(self):
         def _do():
+            ensure_company_infrastructure(request.env, request.env.company)
             p = self._payload()
             lines = p.get('lines') or []
             if not lines:
@@ -62,6 +63,7 @@ class LuumoPurchasesController(LuumoBaseController):
             }) for l in lines]
             po = request.env['purchase.order'].create({
                 'partner_id': supplier.id,
+                'company_id': request.env.company.id,
                 'order_line': order_lines,
             })
             po.button_confirm()

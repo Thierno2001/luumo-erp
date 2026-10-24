@@ -9,7 +9,7 @@ from odoo import SUPERUSER_ID
 from odoo.exceptions import AccessDenied, ValidationError
 from odoo.http import request, root
 
-from ..services.accounting_service import ensure_company_warehouse
+from ..services.accounting_service import ensure_company_infrastructure, ensure_company_warehouse
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import (
     check_rate_limit,
@@ -69,6 +69,8 @@ class LuumoAuthController(LuumoBaseController):
             root.session_store.rotate(request.session, request.env)
 
         user = request.env['res.users'].browse(request.session.uid)
+        ensure_company_infrastructure(request.env, company=user.company_id, user=user)
+        request.env.cr.commit()
         return self._ok({
             'session_id': request.session.sid,
             'user': {
@@ -97,7 +99,7 @@ class LuumoAuthController(LuumoBaseController):
         try:
             p = self._payload()
             company_name = clean_text(p.get('company_name'), "Nom de l'entreprise", min_len=2, max_len=100, required=True)
-            admin_name = clean_text(p.get('admin_name'), 'Nom complet du gérant', min_len=2, max_len=100, required=True)
+            admin_name = clean_text(p.get('admin_name') or p.get('name'), 'Nom complet du gérant', min_len=2, max_len=100, required=True)
             login = validate_email(p.get('login'), required=True)
             phone = validate_phone(p.get('phone'), required=True)
             city = clean_text(p.get('city') or 'Conakry', 'Ville / Quartier', min_len=2, max_len=80, required=True)
@@ -172,6 +174,7 @@ class LuumoAuthController(LuumoBaseController):
                     user_vals['groups_id'] = [(6, 0, group_ids)]
 
                 new_user = su_env['res.users'].create(user_vals)
+                ensure_company_infrastructure(su_env, company=company, user=new_user)
 
             # Valider définitivement la création en base avant l'authentification
             # (nécessaire car authenticate() ouvre son propre curseur PostgreSQL)
