@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, readSession, writeSession, type Session } from "@/lib/api";
-import type { RegisterCompanyInput } from "@/lib/types";
+import type { BusinessPlanId, RegisterCompanyInput } from "@/lib/types";
 
 type SessionContextValue = {
   session: Session | null;
@@ -13,6 +13,7 @@ type SessionContextValue = {
   startDemo: () => void;
   logout: () => Promise<void>;
   updateEnabledApps: (apps: string[]) => Promise<void>;
+  upgradePlan: (planId: BusinessPlanId) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -73,6 +74,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           ...session.user,
           company: {
             ...session.user.company,
+            plan: res.current_plan,
+            enabled_apps: res.enabled_apps,
+          },
+        },
+      };
+      writeSession(updated);
+      setSession(updated);
+    }
+  };
+
+  const upgradePlan = async (planId: BusinessPlanId) => {
+    const res = await api.upgradeCompanyPlan(planId);
+    if (session) {
+      const updated: Session = {
+        ...session,
+        user: {
+          ...session.user,
+          company: {
+            ...session.user.company,
+            plan: res.current_plan,
             enabled_apps: res.enabled_apps,
           },
         },
@@ -92,6 +113,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         startDemo,
         logout,
         updateEnabledApps,
+        upgradePlan,
       }}
     >
       {children}

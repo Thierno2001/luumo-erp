@@ -13,8 +13,11 @@ from ..services.accounting_service import ensure_company_infrastructure, ensure_
 from ..services.apps_service import (
     ALL_APP_IDS,
     get_company_enabled_apps,
+    get_company_plan,
+    get_company_subscription_info,
     init_company_profile_apps,
     set_company_enabled_apps,
+    upgrade_company_plan,
 )
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import (
@@ -77,6 +80,7 @@ class LuumoAuthController(LuumoBaseController):
         user = request.env['res.users'].browse(request.session.uid)
         ensure_company_infrastructure(request.env, company=user.company_id, user=user)
         request.env.cr.commit()
+        plan = get_company_plan(request.env, user.company_id)
         enabled_apps = get_company_enabled_apps(request.env, user.company_id)
         return self._ok({
             'session_id': request.session.sid,
@@ -87,6 +91,7 @@ class LuumoAuthController(LuumoBaseController):
                 'company': {
                     'id': user.company_id.id,
                     'name': user.company_id.name,
+                    'plan': plan,
                     'enabled_apps': enabled_apps,
                 },
             },
@@ -199,6 +204,7 @@ class LuumoAuthController(LuumoBaseController):
             if request.session.should_rotate:
                 root.session_store.rotate(request.session, request.env)
 
+            plan = get_company_plan(su_env, company)
             enabled_apps = get_company_enabled_apps(su_env, company)
             return self._ok({
                 'session_id': request.session.sid,
@@ -209,6 +215,7 @@ class LuumoAuthController(LuumoBaseController):
                     'company': {
                         'id': company.id,
                         'name': company.name,
+                        'plan': plan,
                         'enabled_apps': enabled_apps,
                     },
                 },
@@ -226,6 +233,7 @@ class LuumoAuthController(LuumoBaseController):
     def auth_me(self):
         def _do():
             user = request.env.user
+            plan = get_company_plan(request.env, user.company_id)
             enabled_apps = get_company_enabled_apps(request.env, user.company_id)
             return self._ok({
                 'user': {
@@ -235,6 +243,7 @@ class LuumoAuthController(LuumoBaseController):
                     'company': {
                         'id': user.company_id.id,
                         'name': user.company_id.name,
+                        'plan': plan,
                         'enabled_apps': enabled_apps,
                     },
                 },
@@ -249,20 +258,15 @@ class LuumoAuthController(LuumoBaseController):
 
     @luumo_route('/company/apps', ['GET'])
     def get_company_apps(self):
-        """Récupère la liste des applications activées pour l'entreprise connectée."""
+        """Récupère l'état complet du forfait et des applications autorisées/activées."""
         def _do():
             env = request.env
-            company = env.company
-            enabled = get_company_enabled_apps(env, company)
-            return self._ok({
-                'enabled_apps': enabled,
-                'all_apps': ALL_APP_IDS,
-            })
+            return self._ok(get_company_subscription_info(env, env.company))
         return self._guard(_do)
 
     @luumo_route('/company/apps', ['POST'])
     def update_company_apps(self):
-        """Met à jour les applications activées pour l'entreprise connectée (Niveau 2)."""
+        """Met à jour les applications activées (visibles) dans la limite du forfait souscrit."""
         def _do():
             env = request.env
             company = env.company
@@ -270,10 +274,22 @@ class LuumoAuthController(LuumoBaseController):
             apps = p.get('enabled_apps')
             if not isinstance(apps, list):
                 raise ValidationError("Le format des applications activées est invalide (liste attendue).")
-            updated = set_company_enabled_apps(env, company, apps)
+            set_company_enabled_apps(env, company, apps)
             env.cr.commit()
-            return self._ok({
-                'enabled_apps': updated,
-                'all_apps': ALL_APP_IDS,
-            })
+            return self._ok(get_company_subscription_info(env, company))
+        return self._guard(_do)
+
+    @luumo_route('/company/plan/upgrade', ['POST'])
+    def upgrade_company_plan(self):
+        """Surclassement du forfait entreprise (ex. Boutique -> Grossiste & Entreprise)."""
+        def _do():
+            env = request.env
+            company = env.company
+            p = self._payload()
+            new_plan_id = clean_text(p.get('plan_id'), "Identifiant du forfait", min_len=2, max_len=30, required=True)
+            res = upgrade_company_plan(env, company, new_plan_id)
+            if not res:
+                return self._error("Forfait sélectionné invalide.", 400)
+            env.cr.commit()
+            return self._ok(get_company_subscription_info(env, company))
         return self._guard(_do)

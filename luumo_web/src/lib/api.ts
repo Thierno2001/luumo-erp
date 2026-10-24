@@ -11,6 +11,7 @@ import {
   validateVatNifOwasp,
 } from "./security";
 import type {
+  BusinessPlanId,
   CompanyAppsResponse,
   CreateCustomerInput,
   CreateEmployeeInput,
@@ -378,6 +379,11 @@ export const api = {
   async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
     if (isDemo()) return demo.updateCompanyApps(enabled_apps);
     return (await post<CompanyAppsResponse>("/company/apps", { enabled_apps })).data;
+  },
+
+  async upgradeCompanyPlan(plan_id: BusinessPlanId): Promise<CompanyAppsResponse> {
+    if (isDemo()) return demo.upgradeCompanyPlan(plan_id);
+    return (await post<CompanyAppsResponse>("/company/plan/upgrade", { plan_id })).data;
   },
 
   imageUrl(path: string | null) {

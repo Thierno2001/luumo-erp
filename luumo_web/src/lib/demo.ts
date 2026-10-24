@@ -4,7 +4,10 @@
  * lisent et modifient les mêmes objets en mémoire (logique 360° d'Odoo).
  */
 import type {
+  BusinessPlanId,
   CompanyAppsResponse,
+  CompanyPlan,
+  CompanySubscriptionInfo,
   CreateEmployeeInput,
   CreateExpenseInput,
   CreateOrderInput,
@@ -28,6 +31,33 @@ import type {
   Vehicle,
 } from "./types";
 
+export const DEMO_PLANS: Record<BusinessPlanId, CompanyPlan> = {
+  retail: {
+    id: "retail",
+    name: "Forfait Boutique & Caisse",
+    allowed_apps: ["pos", "inventory", "customers", "dashboard"],
+    monthly_price: 150000,
+    description: "Idéal pour le commerce de détail, supérettes, pharmacies et quincailleries.",
+    badge: "Starter",
+  },
+  services: {
+    id: "services",
+    name: "Forfait Pro Services & B2B",
+    allowed_apps: ["orders", "customers", "hr", "dashboard"],
+    monthly_price: 250000,
+    description: "Idéal pour prestataires, cabinets, transitaires et agences de service.",
+    badge: "Pro B2B",
+  },
+  wholesale: {
+    id: "wholesale",
+    name: "Forfait Grossiste & Entreprise",
+    allowed_apps: ["pos", "orders", "dashboard", "inventory", "purchases", "customers", "hr", "fleet"],
+    monthly_price: 450000,
+    description: "Suite complète 360° avec parc de camions, livraisons, achats conteneurs et RH.",
+    badge: "Illimité 360°",
+  },
+};
+
 export const DEMO_USER: User = {
   id: 2,
   name: "Mamadou Diallo",
@@ -35,6 +65,7 @@ export const DEMO_USER: User = {
   company: {
     id: 1,
     name: "Diallo & Fils — Madina",
+    plan: DEMO_PLANS.wholesale,
     enabled_apps: [
       "pos",
       "orders",
@@ -806,17 +837,15 @@ export const demo = {
 
   // --- Gestion modulaire des applications (Niveaux 1 & 2) ---
   async getCompanyApps(): Promise<CompanyAppsResponse> {
-    const apps = DEMO_USER.company.enabled_apps ?? [
-      "pos",
-      "orders",
-      "dashboard",
-      "inventory",
-      "purchases",
-      "customers",
-      "hr",
-      "fleet",
-    ];
+    const plan = DEMO_USER.company.plan ?? DEMO_PLANS.wholesale;
+    const allowed = plan.allowed_apps;
+    const apps = (DEMO_USER.company.enabled_apps ?? allowed).filter((id) =>
+      allowed.includes(id)
+    );
+    if (!apps.includes("dashboard")) apps.push("dashboard");
     return delay({
+      current_plan: plan,
+      allowed_apps: allowed,
       enabled_apps: apps,
       all_apps: [
         "pos",
@@ -828,15 +857,19 @@ export const demo = {
         "hr",
         "fleet",
       ],
+      plans: DEMO_PLANS,
     });
   },
 
   async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
-    const valid = enabled_apps.includes("dashboard")
-      ? enabled_apps
-      : [...enabled_apps, "dashboard"];
+    const plan = DEMO_USER.company.plan ?? DEMO_PLANS.wholesale;
+    const allowed = plan.allowed_apps;
+    const valid = enabled_apps.filter((id) => allowed.includes(id));
+    if (!valid.includes("dashboard")) valid.push("dashboard");
     DEMO_USER.company.enabled_apps = valid;
     return delay({
+      current_plan: plan,
+      allowed_apps: allowed,
       enabled_apps: valid,
       all_apps: [
         "pos",
@@ -848,6 +881,29 @@ export const demo = {
         "hr",
         "fleet",
       ],
+      plans: DEMO_PLANS,
+    });
+  },
+
+  async upgradeCompanyPlan(plan_id: BusinessPlanId): Promise<CompanyAppsResponse> {
+    const plan = DEMO_PLANS[plan_id] ?? DEMO_PLANS.wholesale;
+    DEMO_USER.company.plan = plan;
+    DEMO_USER.company.enabled_apps = [...plan.allowed_apps];
+    return delay({
+      current_plan: plan,
+      allowed_apps: plan.allowed_apps,
+      enabled_apps: plan.allowed_apps,
+      all_apps: [
+        "pos",
+        "orders",
+        "dashboard",
+        "inventory",
+        "purchases",
+        "customers",
+        "hr",
+        "fleet",
+      ],
+      plans: DEMO_PLANS,
     });
   },
 };
