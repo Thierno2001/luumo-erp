@@ -94,7 +94,7 @@ class LuumoHrController(LuumoBaseController):
             if wage > 0:
                 vals['notes'] = f"WAGE:{wage}"
 
-            employee = env['hr.employee'].create(vals)
+            employee = env['hr.employee'].sudo().create(vals)
             return self._ok(serialize_employee(employee), status=201)
         return self._guard(_do)
 
@@ -112,21 +112,22 @@ class LuumoHrController(LuumoBaseController):
             from_cash = bool(p.get('from_cash', True))
 
             env = request.env
-            Employee = env['hr.employee']
+            Employee = env['hr.employee'].sudo()
             employee = Employee.search([
                 ('name', '=ilike', emp_name),
                 ('company_id', '=', env.company.id)
             ], limit=1)
-            if not employee:
-                employee = Employee.search([('name', '=ilike', emp_name)], limit=1)
             if not employee:
                 employee = Employee.create({
                     'name': emp_name,
                     'company_id': env.company.id,
                 })
 
-            Product = env['product.product']
-            exp_product = Product.search([('can_be_expensed', '=', True)], limit=1)
+            Product = env['product.product'].sudo()
+            exp_product = Product.search([
+                ('can_be_expensed', '=', True),
+                '|', ('company_id', '=', False), ('company_id', '=', env.company.id)
+            ], limit=1)
             if not exp_product:
                 exp_product = Product.create({
                     'name': 'Frais de fonctionnement Luumo',
@@ -134,9 +135,10 @@ class LuumoHrController(LuumoBaseController):
                     'sale_ok': False,
                     'purchase_ok': True,
                     'type': 'service',
+                    'company_id': False,
                 })
 
-            expense = env['hr.expense'].create({
+            expense = env['hr.expense'].sudo().create({
                 'name': name,
                 'employee_id': employee.id,
                 'product_id': exp_product.id,

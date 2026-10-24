@@ -72,7 +72,10 @@ export default function HrAndExpensesPage() {
       setEmployees(overview.employees);
       setExpenses(overview.expenses);
       if (overview.employees.length > 0) {
-        setExpEmployee((prev) => prev || overview.employees[0].name);
+        setExpEmployee((prev) => {
+          const exists = overview.employees.some((e) => e.name === prev);
+          return exists && prev ? prev : overview.employees[0].name;
+        });
       }
     } catch (err) {
       setError(

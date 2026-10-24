@@ -149,6 +149,8 @@ class LuumoAuthController(LuumoBaseController):
                     'purchase.group_purchase_manager',
                     'account.group_account_invoice',
                     'hr.group_hr_user',
+                    'hr_expense.group_hr_expense_user',
+                    'hr_expense.group_hr_expense_manager',
                     'fleet.fleet_group_manager',
                 ]
                 group_ids = []
