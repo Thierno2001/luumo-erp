@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Receipt,
   Check,
+  Table2,
+  LayoutGrid,
 } from "lucide-react";
 
 const VEHICLE_TYPES: Vehicle["vehicle_type"][] = [
@@ -44,6 +46,7 @@ const REPAIR_SUGGESTIONS = [
 
 export default function FleetPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -211,6 +214,36 @@ export default function FleetPage() {
       subtitle="Suivi du parc de camions, tricycles « bombonnes », fourgonnettes et chauffeurs pour vos livraisons clients."
       actions={
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Sélecteur de vue : Tableau logistique (Option B) vs Fiches (Option A) */}
+          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#DCE5E1] shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === "table"
+                  ? "bg-[#115040] text-white shadow-2xs"
+                  : "text-[#526B63] hover:text-[#0B2920]"
+              }`}
+              title="Vue Tableau logistique (Option B)"
+            >
+              <Table2 className="w-3.5 h-3.5" />
+              <span>Tableau</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-[#115040] text-white shadow-2xs"
+                  : "text-[#526B63] hover:text-[#0B2920]"
+              }`}
+              title="Vue Fiches découpées (Option A)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Fiches</span>
+            </button>
+          </div>
+
           <SmartButton
             href="/hr"
             label="Chauffeurs & Gasoil"
@@ -286,18 +319,136 @@ export default function FleetPage() {
               <span>Ajouter un premier véhicule</span>
             </button>
           </div>
+        ) : viewMode === "table" ? (
+          /* Option B : Table d'Opérations Logistique (Lecture directe en 1 seconde) */
+          <div className="bg-white rounded-2xl border border-[#DCE5E1] overflow-hidden card-shadow">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F6F8F7] text-[#526B63] font-semibold border-b border-[#DCE5E1]">
+                  <tr>
+                    <th className="py-3 px-4">Véhicule &amp; Plaque</th>
+                    <th className="py-3 px-4">Chauffeur</th>
+                    <th className="py-3 px-4">Zone / Axe</th>
+                    <th className="py-3 px-4 text-center">Statut</th>
+                    <th className="py-3 px-4 text-right">Carburant / mois</th>
+                    <th className="py-3 px-4 text-center">Actions Rapides</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EEF3F1]">
+                  {vehicles.map((v) => (
+                    <tr key={v.id} className="hover:bg-[#F9FBFA] transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-heading font-bold text-sm text-[#0B2920]">
+                          {v.name}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-xs text-[#115040] font-bold">
+                            {v.license_plate}
+                          </span>
+                          <span className="text-[#526B63] text-[11px]">
+                            • {v.vehicle_type} • {v.odometer.toLocaleString("fr-FR")} km
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-[#0B2920]">
+                        <div className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-[#115040]" />
+                          <span>{v.driver || "Non assigné"}</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#526B63]">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#526B63]" />
+                          <span>{v.route || "Conakry"}</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <StatusBadge
+                          variant={
+                            v.status === "Entretien"
+                              ? "warning"
+                              : v.status === "En tournée" || v.status === "Opérationnel"
+                                ? "success"
+                                : "neutral"
+                          }
+                          label={v.status}
+                        />
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-heading font-bold text-[#0B2920] tabular-nums">
+                        {formatGNF(v.monthly_fuel || 0)}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={actionLoading === v.id}
+                            onClick={() => handleToggleStatus(v)}
+                            className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 ${
+                              v.status === "Entretien"
+                                ? "bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] border border-[#A5D6A7]"
+                                : "bg-[#FFF8E1] hover:bg-[#FFECB3] text-[#B78103] border border-[#FFE082]"
+                            }`}
+                            title={
+                              v.status === "Entretien"
+                                ? "Remettre le véhicule en service actif"
+                                : "Signaler le véhicule au garage pour maintenance"
+                            }
+                          >
+                            {v.status === "Entretien" ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-[#1B5E20]" />
+                                <span>Sortie d&apos;atelier</span>
+                              </>
+                            ) : (
+                              <>
+                                <Wrench className="w-3 h-3 text-[#B78103]" />
+                                <span>Mettre au garage</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openRepairModal(v)}
+                            className="py-1.5 px-2.5 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 text-[#0B2920] text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
+                            title="Enregistrer une réparation et décaisser les frais"
+                          >
+                            <Receipt className="w-3 h-3 text-[#115040]" />
+                            <span>Réparation</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
+          /* Option A : Fiches Véhicules Découpées en 2 Blocs Aérés */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {vehicles.map((v) => (
               <div
                 key={v.id}
-                className="rounded-[18px] bg-white border border-[#DCE5E1] p-5 card-shadow flex flex-col justify-between gap-4"
+                className="rounded-2xl bg-white border border-[#DCE5E1] p-5 card-shadow flex flex-col justify-between gap-4 hover:border-[#115040]/50 transition-colors"
               >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="px-3 py-1 rounded-lg bg-[#0B2920] text-[#F3BC33] font-mono text-xs font-bold tracking-wider">
-                      {v.license_plate}
-                    </span>
+                <div className="space-y-4">
+                  {/* En-tête véhicule */}
+                  <div className="flex items-start justify-between gap-3 border-b border-[#EEF3F1] pb-3">
+                    <div>
+                      <h3 className="font-heading text-base font-bold text-[#0B2920]">
+                        {v.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="px-2 py-0.5 rounded bg-[#0B2920] text-[#F3BC33] font-mono text-xs font-bold tracking-wider">
+                          {v.license_plate}
+                        </span>
+                        <span className="text-xs text-[#526B63] font-medium">
+                          {v.vehicle_type}
+                        </span>
+                      </div>
+                    </div>
+
                     <StatusBadge
                       variant={
                         v.status === "Entretien"
@@ -310,90 +461,77 @@ export default function FleetPage() {
                     />
                   </div>
 
-                  <h3 className="font-heading text-base font-bold text-[#0B2920] mt-3">
-                    {v.name}
-                  </h3>
-                  <p className="text-xs text-[#115040] font-medium mt-0.5">
-                    {v.vehicle_type}
-                  </p>
-
-                  <div className="mt-4 space-y-2 pt-3 border-t border-[#EEF3F1] text-xs">
+                  {/* Bloc 1 : Mission & Chauffeur */}
+                  <div className="bg-[#FAFBFB] p-3 rounded-xl border border-[#EEF3F1] space-y-2 text-xs">
                     <div className="flex items-center justify-between text-[#526B63]">
                       <span className="flex items-center gap-1.5">
                         <UserCheck className="w-3.5 h-3.5 text-[#115040]" />
-                        Chauffeur attitré
+                        Chauffeur :
                       </span>
-                      <strong className="text-[#0B2920]">{v.driver}</strong>
+                      <strong className="text-[#0B2920]">{v.driver || "Non assigné"}</strong>
                     </div>
                     <div className="flex items-center justify-between text-[#526B63]">
                       <span className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-[#115040]" />
-                        Zone / Axe
+                        Trajet :
                       </span>
-                      <strong className="text-[#0B2920]">{v.route}</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-[#526B63]">
-                      <span className="flex items-center gap-1.5">
-                        <Gauge className="w-3.5 h-3.5 text-[#115040]" />
-                        Kilométrage compteur
-                      </span>
-                      <strong className="text-[#0B2920] tabular-nums">
-                        {v.odometer.toLocaleString("fr-FR")} km
+                      <strong className="text-[#0B2920] text-right truncate max-w-[180px]" title={v.route}>
+                        {v.route || "Conakry"}
                       </strong>
                     </div>
                   </div>
+
+                  {/* Bloc 2 : Compteur & Budget Carburant */}
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="text-[#526B63] flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-[#115040]" />
+                      <strong>{v.odometer.toLocaleString("fr-FR")} km</strong>
+                    </span>
+                    <span className="font-heading font-bold text-[#115040] tabular-nums">
+                      {formatGNF(v.monthly_fuel || 0)} <span className="text-[10px] text-[#526B63] font-normal">/mois</span>
+                    </span>
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="pt-3 border-t border-[#EEF3F1] flex items-center justify-between">
-                    <span className="text-[11px] uppercase tracking-wider text-[#526B63]">
-                      Budget Carburant / mois
-                    </span>
-                    <span className="font-heading text-sm font-bold text-[#0B2920] tabular-nums">
-                      {formatGNF(v.monthly_fuel || 0)}
-                    </span>
-                  </div>
+                {/* Boutons d'action rapides */}
+                <div className="pt-3 border-t border-[#EEF3F1] flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={actionLoading === v.id}
+                    onClick={() => handleToggleStatus(v)}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                      v.status === "Entretien"
+                        ? "bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] border border-[#A5D6A7]"
+                        : "bg-[#FFF8E1] hover:bg-[#FFECB3] text-[#B78103] border border-[#FFE082]"
+                    }`}
+                    title={
+                      v.status === "Entretien"
+                        ? "Remettre le véhicule en service actif"
+                        : "Signaler le véhicule au garage pour maintenance"
+                    }
+                  >
+                    {v.status === "Entretien" ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#1B5E20]" />
+                        <span>Sortie d&apos;atelier</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="w-3.5 h-3.5 text-[#B78103]" />
+                        <span>Mettre au garage</span>
+                      </>
+                    )}
+                  </button>
 
-                  {/* Boutons d'action rapides */}
-                  <div className="pt-3 border-t border-[#EEF3F1] flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={actionLoading === v.id}
-                      onClick={() => handleToggleStatus(v)}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
-                        v.status === "Entretien"
-                          ? "bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#1B5E20] border border-[#A5D6A7]"
-                          : "bg-[#FFF8E1] hover:bg-[#FFECB3] text-[#B78103] border border-[#FFE082]"
-                      }`}
-                      title={
-                        v.status === "Entretien"
-                          ? "Remettre le véhicule en service actif"
-                          : "Signaler le véhicule au garage pour maintenance"
-                      }
-                    >
-                      {v.status === "Entretien" ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#1B5E20]" />
-                          <span>Sortie d&apos;atelier</span>
-                        </>
-                      ) : (
-                        <>
-                          <Wrench className="w-3.5 h-3.5 text-[#B78103]" />
-                          <span>Mettre au garage</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => openRepairModal(v)}
-                      className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold bg-[#115040]/10 hover:bg-[#115040]/20 text-[#115040] transition-colors cursor-pointer"
-                      title="Enregistrer les réparations effectuées et sortir les fonds de la caisse"
-                    >
-                      <Receipt className="w-3.5 h-3.5" />
-                      <span>Réparation</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openRepairModal(v)}
+                    className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold bg-[#115040]/10 hover:bg-[#115040]/20 text-[#115040] transition-colors cursor-pointer"
+                    title="Enregistrer les réparations effectuées et sortir les fonds de la caisse"
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Réparation</span>
+                  </button>
                 </div>
               </div>
             ))}

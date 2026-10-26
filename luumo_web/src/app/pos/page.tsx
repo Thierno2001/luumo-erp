@@ -17,6 +17,8 @@ import {
   ShoppingBag,
   QrCode,
   WifiOff,
+  List,
+  LayoutGrid,
 } from "lucide-react";
 import { AppShell, ErrorBanner, Modal, StockBadge } from "@/components/ui";
 import { QrCodeVisual, QrPaymentModal } from "@/components/qr-payment";
@@ -48,6 +50,7 @@ export default function PosPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Tous");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [partnerId, setPartnerId] = useState<number | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
@@ -396,67 +399,208 @@ export default function PosPage() {
             </div>
           </div>
 
-          {/* Filtres de catégories */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {categories.map((cat) => {
-              const active = category === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    active
-                      ? "bg-[#115040] text-[#F3BC33]"
-                      : "bg-white border border-[#DCE5E1] text-[#526B63] hover:text-[#0B2920]"
-                  }`}
-                >
-                  {cat}
-                </button>
-              );
-            })}
+          {/* Filtres de catégories & Sélecteur de vue (Liste vs Grille) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
+              {categories.map((cat) => {
+                const active = category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategory(cat)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                      active
+                        ? "bg-[#115040] text-[#F3BC33]"
+                        : "bg-white border border-[#DCE5E1] text-[#526B63] hover:text-[#0B2920]"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sélecteur de vue Mode Liste / Mode Grille */}
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#DCE5E1] shadow-2xs shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-[#115040] text-white shadow-2xs"
+                    : "text-[#526B63] hover:text-[#0B2920]"
+                }`}
+                title="Vue Liste de comptoir (Option B)"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Liste</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-[#115040] text-white shadow-2xs"
+                    : "text-[#526B63] hover:text-[#0B2920]"
+                }`}
+                title="Vue Grille tactile (Option A)"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Grille</span>
+              </button>
+            </div>
           </div>
 
-          {/* Grille Produits */}
+          {/* Affichage des Produits : Mode Liste (Option B) vs Mode Grille (Option A) */}
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
               {Array.from({ length: 6 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="h-36 rounded-[14px] bg-[#EEF3F1] animate-pulse border border-[#DCE5E1]"
+                  className="h-32 rounded-2xl bg-[#EEF3F1] animate-pulse border border-[#DCE5E1]"
                 />
               ))}
             </div>
+          ) : viewMode === "list" ? (
+            /* Option B : Table de comptoir claire et aérée */
+            <div className="bg-white rounded-2xl border border-[#DCE5E1] overflow-hidden card-shadow">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F6F8F7] text-[#526B63] font-semibold border-b border-[#DCE5E1]">
+                    <tr>
+                      <th className="py-3 px-4">Article</th>
+                      <th className="py-3 px-4">Disponibilité</th>
+                      <th className="py-3 px-4 text-right">Prix Unitaire</th>
+                      <th className="py-3 px-4 text-center">Au Ticket</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF3F1]">
+                    {filteredProducts.map((p) => {
+                      const inCart = cart.find((c) => c.product.id === p.id);
+                      const isOutOfStock = p.qty_available !== null && p.qty_available <= 0;
+                      return (
+                        <tr
+                          key={p.id}
+                          onClick={() => addToCart(p)}
+                          className={`hover:bg-[#F9FBFA] transition-colors cursor-pointer ${
+                            inCart ? "bg-[#E8F2EE]/40" : ""
+                          }`}
+                        >
+                          <td className="py-3 px-4">
+                            <div className="font-heading font-bold text-sm text-[#0B2920]">
+                              {p.name}
+                            </div>
+                            <div className="text-[11px] text-[#526B63] mt-0.5">
+                              {p.category} • par {p.uom}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {p.qty_available === null ? (
+                              <span className="text-[#526B63] font-medium">—</span>
+                            ) : isOutOfStock ? (
+                              <span className="text-[#C2410C] font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#C2410C]" />
+                                Rupture de stock
+                              </span>
+                            ) : p.qty_available <= 5 ? (
+                              <span className="text-[#B78103] font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#F3BC33]" />
+                                Stock bas ({p.qty_available})
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {p.qty_available} en stock
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right font-heading font-extrabold text-sm text-[#115040] tabular-nums">
+                            {formatGNF(p.list_price)}
+                          </td>
+                          <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                            {inCart ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateQty(p.id, inCart.qty - 1)}
+                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer"
+                                  title="Diminuer la quantité"
+                                >
+                                  -
+                                </button>
+                                <span className="font-heading font-bold text-xs px-2.5 py-0.5 rounded-md bg-[#115040] text-white tabular-nums">
+                                  {inCart.qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => updateQty(p.id, inCart.qty + 1)}
+                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer"
+                                  title="Augmenter la quantité"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => addToCart(p)}
+                                className="px-3 py-1.5 rounded-lg bg-[#E8F2EE] hover:bg-[#115040] text-[#115040] hover:text-white font-semibold text-xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Ajouter</span>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
+            /* Option A : Cartes Tactiles Épurées (1 tap = 1 ajout) */
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
               {filteredProducts.map((p) => {
                 const inCart = cart.find((c) => c.product.id === p.id);
+                const isOutOfStock = p.qty_available !== null && p.qty_available <= 0;
                 return (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => addToCart(p)}
-                    className={`text-left rounded-[14px] bg-white p-4 border transition-all cursor-pointer flex flex-col justify-between card-shadow hover:border-[#115040] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#115040] ${
+                    className={`text-left rounded-2xl bg-white p-4 border transition-all cursor-pointer flex flex-col justify-between card-shadow hover:border-[#115040] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#115040] ${
                       inCart
-                        ? "border-[#115040] ring-2 ring-[#115040]/20"
+                        ? "border-[#115040] ring-2 ring-[#115040]/20 bg-[#F9FBFA]"
                         : "border-[#DCE5E1]"
                     }`}
                   >
                     <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-[11px] font-mono text-[#526B63]">
-                          {p.default_code || p.category}
-                        </span>
-                        <StockBadge qty={p.qty_available} />
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="text-[#526B63] font-medium">{p.category}</span>
+                        {p.qty_available === null ? null : isOutOfStock ? (
+                          <span className="text-[#C2410C] font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#C2410C]" /> Rupture
+                          </span>
+                        ) : p.qty_available <= 5 ? (
+                          <span className="text-[#B78103] font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#F3BC33]" /> Stock bas ({p.qty_available})
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {p.qty_available} dispo
+                          </span>
+                        )}
                       </div>
-                      <h3 className="font-heading font-semibold text-sm text-[#0B2920] mt-2 line-clamp-2">
+                      <h3 className="font-heading font-bold text-sm text-[#0B2920] mt-2 line-clamp-2">
                         {p.name}
                       </h3>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#DCE5E1]/70 flex items-center justify-between">
+                    <div className="mt-4 pt-3 border-t border-[#EEF3F1] flex items-center justify-between">
                       <div>
-                        <span className="font-heading text-base font-bold tabular-nums text-[#115040]">
+                        <span className="font-heading text-base font-extrabold tabular-nums text-[#115040]">
                           {formatGNF(p.list_price)}
                         </span>
                         <span className="text-[11px] text-[#526B63] block">
@@ -468,8 +612,8 @@ export default function PosPage() {
                           × {inCart.qty}
                         </span>
                       ) : (
-                        <span className="w-8 h-8 rounded-lg bg-[#E8F2EE] text-[#115040] flex items-center justify-center">
-                          <Plus className="w-4 h-4" />
+                        <span className="w-8 h-8 rounded-lg bg-[#E8F2EE] text-[#115040] flex items-center justify-center font-bold text-xs">
+                          +
                         </span>
                       )}
                     </div>
