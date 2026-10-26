@@ -520,23 +520,29 @@ export default function PosPage() {
                           </td>
                           <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                             {inCart ? (
-                              <div className="inline-flex items-center gap-1.5">
+                              <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => updateQty(p.id, inCart.qty - 1)}
-                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer"
-                                  title="Diminuer la quantité"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateQty(p.id, -1);
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer text-[#0B2920] active:scale-95 transition-transform"
+                                  title="Diminuer la quantité de 1"
                                 >
                                   -
                                 </button>
-                                <span className="font-heading font-bold text-xs px-2.5 py-0.5 rounded-md bg-[#115040] text-white tabular-nums">
+                                <span className="font-heading font-bold text-xs px-2.5 py-0.5 rounded-md bg-[#115040] text-white tabular-nums min-w-[28px] text-center">
                                   {inCart.qty}
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => updateQty(p.id, inCart.qty + 1)}
-                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer"
-                                  title="Augmenter la quantité"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateQty(p.id, 1);
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-100 flex items-center justify-center text-xs font-bold cursor-pointer text-[#0B2920] active:scale-95 transition-transform"
+                                  title="Augmenter la quantité de 1"
                                 >
                                   +
                                 </button>
@@ -544,7 +550,10 @@ export default function PosPage() {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => addToCart(p)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(p);
+                                }}
                                 className="px-3 py-1.5 rounded-lg bg-[#E8F2EE] hover:bg-[#115040] text-[#115040] hover:text-white font-semibold text-xs transition-colors cursor-pointer inline-flex items-center gap-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
