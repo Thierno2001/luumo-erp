@@ -17,12 +17,26 @@ export type CompanyPlan = {
   badge?: string;
 };
 
+export type SubscriptionInvoice = {
+  id: number;
+  number: string;
+  date: string;
+  plan_name: string;
+  amount: number;
+  payment_method: string;
+  period: string;
+  status: "paid" | "pending";
+};
+
 export type CompanySubscriptionInfo = {
   current_plan: CompanyPlan;
   allowed_apps: string[];
   enabled_apps: string[];
-  all_apps: string[];
+  status: "active" | "trial" | "past_due";
+  current_period_end: string;
+  days_remaining: number;
   plans: Record<BusinessPlanId, CompanyPlan>;
+  invoices: SubscriptionInvoice[];
 };
 
 export type CompanyAppsResponse = CompanySubscriptionInfo;

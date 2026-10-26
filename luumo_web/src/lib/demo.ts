@@ -27,6 +27,7 @@ import type {
   PurchaseOrder,
   RecordRepairInput,
   RecordRepairResponse,
+  SubscriptionInvoice,
   User,
   Vehicle,
 } from "./types";
@@ -835,57 +836,64 @@ export const demo = {
     return delay(intent, 150);
   },
 
-  // --- Gestion modulaire des applications (Niveaux 1 & 2) ---
-  async getCompanyApps(): Promise<CompanyAppsResponse> {
+  // --- Gestion de l'abonnement & facturation SaaS (Mobile Money) ---
+  async getCompanySubscription(): Promise<CompanySubscriptionInfo> {
     const plan = DEMO_USER.company.plan ?? DEMO_PLANS.wholesale;
-    const allowed = plan.allowed_apps;
-    const apps = (DEMO_USER.company.enabled_apps ?? allowed).filter((id) =>
-      allowed.includes(id)
-    );
-    if (!apps.includes("dashboard")) apps.push("dashboard");
     return delay({
       current_plan: plan,
-      allowed_apps: allowed,
-      enabled_apps: apps,
-      all_apps: [
-        "pos",
-        "orders",
-        "dashboard",
-        "inventory",
-        "purchases",
-        "customers",
-        "hr",
-        "fleet",
-      ],
+      allowed_apps: plan.allowed_apps,
+      enabled_apps: plan.allowed_apps,
+      status: "active",
+      current_period_end: "2026-11-26",
+      days_remaining: 31,
       plans: DEMO_PLANS,
+      invoices: [...demoSubscriptionInvoices],
     });
+  },
+
+  async getCompanyApps(): Promise<CompanyAppsResponse> {
+    return this.getCompanySubscription();
   },
 
   async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
+    return this.getCompanySubscription();
+  },
+
+  async payCompanySubscription(input: {
+    provider: string;
+    phone: string;
+    months?: number;
+  }): Promise<CompanySubscriptionInfo> {
     const plan = DEMO_USER.company.plan ?? DEMO_PLANS.wholesale;
-    const allowed = plan.allowed_apps;
-    const valid = enabled_apps.filter((id) => allowed.includes(id));
-    if (!valid.includes("dashboard")) valid.push("dashboard");
-    DEMO_USER.company.enabled_apps = valid;
+    const months = input.months ?? 1;
+    const amount = months === 12 ? plan.monthly_price * 10 : plan.monthly_price * months;
+    const op = input.provider === "orange_money" ? "Orange Money" : "MTN Mobile Money";
+
+    const newInv: SubscriptionInvoice = {
+      id: demoSubscriptionInvoices.length + 1,
+      number: `FACT-LUUMO-202610-001-${String(demoSubscriptionInvoices.length + 1).padStart(2, "0")}`,
+      date: new Date().toISOString().slice(0, 10),
+      plan_name: plan.name,
+      amount,
+      payment_method: `${op} (${input.phone})`,
+      period: `26/10/2026 au ${months === 12 ? "26/10/2027" : "26/12/2026"}`,
+      status: "paid",
+    };
+    demoSubscriptionInvoices.unshift(newInv);
+
     return delay({
       current_plan: plan,
-      allowed_apps: allowed,
-      enabled_apps: valid,
-      all_apps: [
-        "pos",
-        "orders",
-        "dashboard",
-        "inventory",
-        "purchases",
-        "customers",
-        "hr",
-        "fleet",
-      ],
+      allowed_apps: plan.allowed_apps,
+      enabled_apps: plan.allowed_apps,
+      status: "active",
+      current_period_end: months === 12 ? "2027-10-26" : "2026-12-26",
+      days_remaining: months === 12 ? 365 : 61,
       plans: DEMO_PLANS,
+      invoices: [...demoSubscriptionInvoices],
     });
   },
 
-  async upgradeCompanyPlan(plan_id: BusinessPlanId): Promise<CompanyAppsResponse> {
+  async upgradeCompanyPlan(plan_id: BusinessPlanId): Promise<CompanySubscriptionInfo> {
     const plan = DEMO_PLANS[plan_id] ?? DEMO_PLANS.wholesale;
     DEMO_USER.company.plan = plan;
     DEMO_USER.company.enabled_apps = [...plan.allowed_apps];
@@ -893,19 +901,26 @@ export const demo = {
       current_plan: plan,
       allowed_apps: plan.allowed_apps,
       enabled_apps: plan.allowed_apps,
-      all_apps: [
-        "pos",
-        "orders",
-        "dashboard",
-        "inventory",
-        "purchases",
-        "customers",
-        "hr",
-        "fleet",
-      ],
+      status: "active",
+      current_period_end: "2026-11-26",
+      days_remaining: 31,
       plans: DEMO_PLANS,
+      invoices: [...demoSubscriptionInvoices],
     });
   },
 };
+
+const demoSubscriptionInvoices: SubscriptionInvoice[] = [
+  {
+    id: 1,
+    number: "FACT-LUUMO-202610-001-01",
+    date: "2026-10-24",
+    plan_name: "Forfait Grossiste & Entreprise",
+    amount: 450000,
+    payment_method: "Orange Money (+224 622 11 22 33)",
+    period: "24/10/2026 au 24/11/2026",
+    status: "paid",
+  },
+];
 
 const demoPaymentIntents = new Map<string, PaymentIntent>();

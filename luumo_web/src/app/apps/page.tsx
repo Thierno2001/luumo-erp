@@ -1,110 +1,94 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AppShell,
-  LUUMO_APPS,
   Modal,
-  type LuumoAppDefinition,
 } from "@/components/ui";
-import { useSession } from "@/context/session";
+import { api } from "@/lib/api";
 import { formatGNF } from "@/lib/format";
-import type { BusinessPlanId, CompanyPlan } from "@/lib/types";
+import type {
+  BusinessPlanId,
+  CompanyPlan,
+  CompanySubscriptionInfo,
+  SubscriptionInvoice,
+} from "@/lib/types";
 import {
-  Store,
-  Building2,
-  Briefcase,
-  Check,
+  CreditCard,
   CheckCircle2,
   ArrowLeft,
-  Sparkles,
-  Lock,
-  ArrowUpRight,
+  Calendar,
+  Smartphone,
+  Printer,
   ShieldCheck,
   Zap,
+  ArrowUpRight,
+  FileText,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 
-const PLANS_CONFIG: Record<BusinessPlanId, CompanyPlan> = {
-  retail: {
-    id: "retail",
-    name: "Forfait Boutique & Caisse",
-    allowed_apps: ["pos", "inventory", "customers", "dashboard"],
-    monthly_price: 150000,
-    description: "Commerce de détail, supérettes, pharmacies et quincailleries.",
-    badge: "Starter",
-  },
-  services: {
-    id: "services",
-    name: "Forfait Pro Services & B2B",
-    allowed_apps: ["orders", "customers", "hr", "dashboard"],
-    monthly_price: 250000,
-    description: "Prestataires, cabinets, transitaires et agences de service.",
-    badge: "Pro B2B",
-  },
-  wholesale: {
-    id: "wholesale",
-    name: "Forfait Grossiste & Entreprise",
-    allowed_apps: [
-      "pos",
-      "orders",
-      "dashboard",
-      "inventory",
-      "purchases",
-      "customers",
-      "hr",
-      "fleet",
-    ],
-    monthly_price: 450000,
-    description: "Suite complète 360° avec livraisons, camions, achats import et RH.",
-    badge: "Illimité 360°",
-  },
-};
-
-export default function AppsManagerPage() {
-  const { session, updateEnabledApps, upgradePlan } = useSession();
-  const [saving, setSaving] = useState(false);
+export default function SubscriptionBillingPage() {
+  const [subInfo, setSubInfo] = useState<CompanySubscriptionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Modal de surclassement
+  // Modal de paiement Mobile Money
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [provider, setProvider] = useState<"orange_money" | "mtn_momo">("orange_money");
+  const [durationMonths, setDurationMonths] = useState<number>(1);
+  const [phoneNumber, setPhoneNumber] = useState("+224 620 00 00 00");
+
+  // Modal Surclassement Forfait
   const [upgradeTarget, setUpgradeTarget] = useState<CompanyPlan | null>(null);
-  const [upgrading, setUpgrading] = useState(false);
 
-  const currentPlan: CompanyPlan =
-    session?.user?.company?.plan ?? PLANS_CONFIG.wholesale;
+  // Modal Détail / Reçu Facture
+  const [selectedInvoice, setSelectedInvoice] = useState<SubscriptionInvoice | null>(null);
 
-  const allowedApps = currentPlan.allowed_apps;
-
-  const enabledApps = (
-    session?.user?.company?.enabled_apps ?? allowedApps
-  ).filter((id) => allowedApps.includes(id));
-
-  const handleToggle = async (appId: string) => {
-    if (appId === "dashboard") return; // Dashboard toujours actif
-
-    const isCurrentlyActive = enabledApps.includes(appId);
-    let next: string[];
-    if (isCurrentlyActive) {
-      next = enabledApps.filter((id) => id !== appId);
-    } else {
-      next = [...enabledApps, appId];
-    }
-    if (!next.includes("dashboard")) next.push("dashboard");
-
-    setSaving(true);
-    setSuccessMsg(null);
+  const loadSubscription = useCallback(async () => {
     try {
-      await updateEnabledApps(next);
-      setSuccessMsg(
-        isCurrentlyActive
-          ? "Application masquée de votre écran d'accueil."
-          : "Application activée sur votre écran d'accueil."
-      );
-      setTimeout(() => setSuccessMsg(null), 3000);
+      const data = await api.getCompanySubscription();
+      setSubInfo(data);
     } catch {
       // Ignoré
     } finally {
-      setSaving(false);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSubscription();
+  }, [loadSubscription]);
+
+  const handlePaySubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaying(true);
+    setSuccessMsg(null);
+    try {
+      const updated = await api.payCompanySubscription({
+        provider,
+        phone: phoneNumber.trim(),
+        months: durationMonths,
+      });
+      setSubInfo(updated);
+      setPayModalOpen(false);
+      setSuccessMsg(
+        `Paiement de ${formatGNF(
+          durationMonths === 12
+            ? updated.current_plan.monthly_price * 10
+            : updated.current_plan.monthly_price * durationMonths
+        )} validé avec succès par ${
+          provider === "orange_money" ? "Orange Money" : "MTN Mobile Money"
+        }. Votre abonnement a été prolongé !`
+      );
+      setTimeout(() => setSuccessMsg(null), 6000);
+    } catch {
+      // Ignoré
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -113,11 +97,12 @@ export default function AppsManagerPage() {
     setUpgrading(true);
     setSuccessMsg(null);
     try {
-      await upgradePlan(upgradeTarget.id);
-      setSuccessMsg(
-        `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Toutes les applications associées sont débloquées.`
-      );
+      const updated = await api.upgradeCompanyPlan(upgradeTarget.id);
+      setSubInfo(updated);
       setUpgradeTarget(null);
+      setSuccessMsg(
+        `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Vos nouvelles applications sont débloquées.`
+      );
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch {
       // Ignoré
@@ -126,307 +111,424 @@ export default function AppsManagerPage() {
     }
   };
 
+  const currentPlan = subInfo?.current_plan;
+  const plans = subInfo?.plans;
+  const invoices = subInfo?.invoices ?? [];
+
   return (
     <AppShell
-      title="Mon Forfait & Mes Applications"
-      subtitle="Gérez les applications incluses dans votre formule et découvrez les fonctionnalités pour développer votre activité."
+      title="Abonnement & Facturation"
+      subtitle="Gestion de votre forfait Luumo, renouvellement instantané par Mobile Money et factures acquittées."
       actions={
         <Link
           href="/"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-semibold shadow-xs transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5 text-[#F3BC33]" />
-          <span>Voir mon accueil</span>
+          <span>Retour à l&apos;accueil</span>
         </Link>
       }
     >
       <div className="space-y-8 max-w-5xl">
         {successMsg && (
           <div className="p-4 rounded-xl bg-[#E8F5E9] border border-[#A5D6A7] text-[#1B5E20] text-sm font-medium flex items-center gap-3">
-            <Check className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-[#1B5E20]" />
             <span>{successMsg}</span>
           </div>
         )}
 
-        {/* Carte Forfait Actif */}
-        <div className="rounded-[22px] bg-gradient-to-br from-[#0B2920] to-[#143D31] text-white p-6 sm:p-7 border border-white/10 shadow-lg relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative z-10">
-            <div className="space-y-1.5">
+        {/* 1. Carte héro Forfait Actif & Échéance */}
+        <div className="rounded-[22px] bg-gradient-to-br from-[#0B2920] to-[#143D31] text-white p-6 sm:p-8 border border-white/10 shadow-lg relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2">
               <div className="flex items-center gap-2.5">
-                <span className="px-3 py-0.5 rounded-full bg-[#F3BC33] text-[#0B2920] font-heading text-xs font-bold uppercase tracking-wider">
-                  {currentPlan.badge ?? "Forfait Actif"}
+                <span className="px-3 py-1 rounded-full bg-[#F3BC33] text-[#0B2920] font-heading text-xs font-bold uppercase tracking-wider">
+                  {currentPlan?.badge ?? "Forfait Actif"}
                 </span>
-                <span className="text-xs text-emerald-200">
-                  {session?.user?.company?.name}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-medium border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>
+                    {subInfo?.status === "trial" ? "Période d'essai" : "Abonnement Actif"}
+                  </span>
                 </span>
               </div>
-              <h2 className="font-heading text-xl sm:text-2xl font-bold text-white">
-                {currentPlan.name}
+
+              <h2 className="font-heading text-2xl sm:text-3xl font-bold text-white">
+                {currentPlan?.name ?? "Chargement du forfait..."}
               </h2>
               <p className="text-xs sm:text-sm text-emerald-100/80 max-w-xl">
-                {currentPlan.description}
+                {currentPlan?.description}
               </p>
+
+              <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-emerald-200">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#F3BC33]" />
+                  <span>
+                    Échéance :{" "}
+                    <strong className="text-white">
+                      {subInfo?.current_period_end ?? "—"}
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-[#F3BC33]" />
+                  <span>
+                    Restant :{" "}
+                    <strong className="text-white">
+                      {subInfo?.days_remaining ?? 0} jour(s)
+                    </strong>
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="sm:text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
-              <div className="text-[11px] uppercase tracking-wider text-emerald-200/70 font-semibold">
-                Tarif Forfait
+            <div className="md:text-right shrink-0 pt-4 md:pt-0 border-t md:border-t-0 border-white/10 space-y-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-emerald-200/70 font-semibold">
+                  Tarif Mensuel
+                </div>
+                <div className="font-heading text-3xl font-bold text-[#F3BC33] tabular-nums">
+                  {formatGNF(currentPlan?.monthly_price ?? 0)}
+                  <span className="text-xs text-emerald-100/70 font-normal"> /mois</span>
+                </div>
               </div>
-              <div className="font-heading text-2xl font-bold text-[#F3BC33] tabular-nums">
-                {formatGNF(currentPlan.monthly_price)}
-                <span className="text-xs text-emerald-100/70 font-normal"> /mois</span>
-              </div>
-              <div className="text-xs text-emerald-200/90 mt-1 flex items-center sm:justify-end gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#F3BC33]" />
-                <span>{allowedApps.length} applications incluses</span>
-              </div>
+
+              <button
+                type="button"
+                onClick={() => setPayModalOpen(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#F3BC33] hover:bg-[#E0A824] text-[#0B2920] font-heading text-sm font-bold shadow-md transition-all cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4 text-[#0B2920]" />
+                <span>Payer par Mobile Money</span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Section 1 : Applications incluses dans votre forfait */}
-        <div className="space-y-3">
+        {/* 2. Historique des Factures Luumo */}
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-heading text-base font-bold text-[#0B2920] flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#115040]" />
-              <span>Applications incluses dans votre forfait ({allowedApps.length})</span>
-            </h3>
-            <span className="text-xs text-[#526B63]">
-              Activez ou masquez les icônes sur votre écran d&apos;accueil
-            </span>
+            <div>
+              <h3 className="font-heading text-lg font-bold text-[#0B2920] flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#115040]" />
+                <span>Factures d&apos;Abonnement Luumo</span>
+              </h3>
+              <p className="text-xs text-[#526B63] mt-0.5">
+                Historique de vos règlements de redevance logicielle acquittés conformes SYSCOHADA.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {LUUMO_APPS.filter((app) => allowedApps.includes(app.id)).map(
-              (app: LuumoAppDefinition) => {
-                const Icon = app.icon;
-                const isEnabled = enabledApps.includes(app.id);
-                const isLocked = app.id === "dashboard";
+          <div className="bg-white rounded-2xl border border-[#DCE5E1] card-shadow overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center text-sm text-[#526B63]">
+                Chargement de vos factures...
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[#526B63]">
+                Aucune facture enregistrée pour le moment.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F6F8F7] text-[#526B63] font-semibold border-b border-[#DCE5E1]">
+                    <tr>
+                      <th className="py-3 px-4">N° Facture</th>
+                      <th className="py-3 px-4">Date de paiement</th>
+                      <th className="py-3 px-4">Forfait</th>
+                      <th className="py-3 px-4">Période couverte</th>
+                      <th className="py-3 px-4">Moyen de règlement</th>
+                      <th className="py-3 px-4 text-right">Montant</th>
+                      <th className="py-3 px-4 text-center">Statut</th>
+                      <th className="py-3 px-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF3F1]">
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-[#F9FBFA] transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-[#0B2920]">
+                          {inv.number}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#526B63]">{inv.date}</td>
+                        <td className="py-3.5 px-4 font-medium text-[#0B2920]">
+                          {inv.plan_name}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#526B63]">{inv.period}</td>
+                        <td className="py-3.5 px-4 text-[#526B63]">
+                          {inv.payment_method}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-heading font-bold text-[#0B2920] tabular-nums">
+                          {formatGNF(inv.amount)}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E8F5E9] text-[#1B5E20] font-semibold text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 text-[#1B5E20]" />
+                            <span>Acquittée</span>
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedInvoice(inv)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#DCE5E1] hover:bg-[#EEF3F1] text-[#115040] font-semibold transition-colors cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Reçu</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Section Forfaits & Surclassement */}
+        {plans && (
+          <div className="space-y-4 pt-4 border-t border-[#DCE5E1]">
+            <div>
+              <h3 className="font-heading text-lg font-bold text-[#0B2920] flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#F3BC33]" />
+                <span>Changer de Forfait (Évolution de votre activité)</span>
+              </h3>
+              <p className="text-xs text-[#526B63] mt-0.5">
+                Besoin de gérer un parc de camions ou des achats à l&apos;import ? Passez à la formule supérieure en 1 clic.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(Object.values(plans) as CompanyPlan[]).map((p) => {
+                const isCurrent = p.id === currentPlan?.id;
 
                 return (
                   <div
-                    key={app.id}
-                    className={`rounded-2xl border p-4.5 transition-all flex items-start justify-between gap-4 ${
-                      isEnabled
-                        ? "bg-white border-[#DCE5E1] card-shadow"
-                        : "bg-[#F7F9F8] border-[#E5ECE9] opacity-75"
+                    key={p.id}
+                    className={`rounded-2xl border p-5 flex flex-col justify-between transition-all ${
+                      isCurrent
+                        ? "border-[#115040] bg-[#E8F2EE]/50 shadow-sm ring-1 ring-[#115040]"
+                        : "border-[#DCE5E1] bg-white hover:border-[#115040]/40"
                     }`}
                   >
-                    <div className="flex items-start gap-3.5">
-                      <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${app.iconBg} ${app.iconColor}`}
-                      >
-                        <Icon className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-heading text-sm font-bold text-[#0B2920]">
-                            {app.name}
-                          </h4>
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[#EEF3F1] text-[#115040]">
-                            Inclus
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#115040]/10 text-[#115040]">
+                          {p.badge}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[11px] font-bold text-[#115040] flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Actuel
                           </span>
+                        )}
+                      </div>
+
+                      <h4 className="font-heading text-sm font-bold text-[#0B2920]">
+                        {p.name}
+                      </h4>
+                      <p className="text-[11px] text-[#526B63] leading-snug">
+                        {p.description}
+                      </p>
+
+                      <div className="pt-2 font-heading text-xl font-bold text-[#0B2920] tabular-nums">
+                        {formatGNF(p.monthly_price)}
+                        <span className="text-xs font-normal text-[#526B63]"> /mois</span>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#EEF3F1] space-y-1">
+                        <div className="text-[11px] font-semibold text-[#115040]">
+                          {p.allowed_apps.length} applications incluses :
                         </div>
-                        <p className="text-xs text-[#526B63] mt-1 line-clamp-2 leading-relaxed">
-                          {app.description}
-                        </p>
+                        <div className="text-[11px] text-[#526B63]">
+                          {p.id === "wholesale"
+                            ? "Caisse, Ventes, Stock, Achats, Clients, RH & Flotte"
+                            : p.id === "services"
+                              ? "Ventes B2B, Clients, RH/Frais & Dashboard"
+                              : "Caisse POS, Inventaire Stock, Clients & Dashboard"}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="shrink-0 pt-1">
-                      {isLocked ? (
-                        <span className="text-[11px] font-bold text-[#526B63] bg-[#EEF3F1] px-2.5 py-1 rounded-lg">
-                          Toujours actif
-                        </span>
+                    <div className="pt-4">
+                      {isCurrent ? (
+                        <div className="w-full py-2.5 rounded-xl bg-[#115040]/10 text-[#115040] text-xs font-bold text-center">
+                          Votre formule actuelle
+                        </div>
                       ) : (
                         <button
                           type="button"
-                          disabled={saving}
-                          onClick={() => handleToggle(app.id)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isEnabled ? "bg-[#115040]" : "bg-[#DCE5E1]"
-                          }`}
-                          title={
-                            isEnabled
-                              ? "Masquer de mon écran d'accueil"
-                              : "Afficher sur mon écran d'accueil"
-                          }
+                          onClick={() => setUpgradeTarget(p)}
+                          className="w-full py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold transition-all cursor-pointer shadow-xs inline-flex items-center justify-center gap-1"
                         >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              isEnabled ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
+                          <span>Passer à ce forfait</span>
+                          <ArrowUpRight className="w-3.5 h-3.5 text-[#F3BC33]" />
                         </button>
                       )}
                     </div>
                   </div>
                 );
-              }
-            )}
-          </div>
-        </div>
-
-        {/* Section 2 : Applications verrouillées (Forfaits supérieurs / Paywall) */}
-        {LUUMO_APPS.filter((app) => !allowedApps.includes(app.id)).length > 0 && (
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h3 className="font-heading text-base font-bold text-[#0B2920] flex items-center gap-2">
-                <Lock className="w-4 h-4 text-[#C87A00]" />
-                <span>Modules disponibles en option supérieure</span>
-              </h3>
-              <span className="text-xs text-[#526B63]">
-                Passez au forfait adapté pour débloquer ces outils
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {LUUMO_APPS.filter((app) => !allowedApps.includes(app.id)).map(
-                (app: LuumoAppDefinition) => {
-                  const Icon = app.icon;
-
-                  // Identifier le forfait qui débloque cette app
-                  const requiredPlanId: BusinessPlanId =
-                    app.id === "fleet" || app.id === "purchases"
-                      ? "wholesale"
-                      : app.id === "orders" || app.id === "hr"
-                        ? "services"
-                        : "wholesale";
-                  const targetPlan = PLANS_CONFIG[requiredPlanId];
-
-                  return (
-                    <div
-                      key={app.id}
-                      className="rounded-2xl border border-[#F3BC33]/30 bg-[#FEFBF2] p-4.5 flex items-start justify-between gap-4 transition-all hover:border-[#F3BC33]"
-                    >
-                      <div className="flex items-start gap-3.5">
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${app.iconBg} ${app.iconColor} opacity-90`}
-                        >
-                          <Icon className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-heading text-sm font-bold text-[#0B2920]">
-                              {app.name}
-                            </h4>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#FFF3D6] text-[#8F5E00] border border-[#F3BC33]/40">
-                              <Lock className="w-2.5 h-2.5" />
-                              <span>{targetPlan.badge}</span>
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#526B63] mt-1 leading-relaxed">
-                            {app.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setUpgradeTarget(targetPlan)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0B2920] hover:bg-[#115040] text-[#F3BC33] text-xs font-bold transition-all cursor-pointer shadow-xs"
-                        >
-                          <span>Débloquer</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-              )}
+              })}
             </div>
           </div>
         )}
-
-        {/* Section 3 : Tableau comparatif des 3 forfaits */}
-        <div className="space-y-4 pt-4 border-t border-[#DCE5E1]">
-          <h3 className="font-heading text-base font-bold text-[#0B2920] flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#F3BC33]" />
-            <span>Tous les Forfaits Luumo disponibles</span>
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {(Object.values(PLANS_CONFIG) as CompanyPlan[]).map((p) => {
-              const isCurrent = p.id === currentPlan.id;
-
-              return (
-                <div
-                  key={p.id}
-                  className={`rounded-2xl border p-5 flex flex-col justify-between transition-all ${
-                    isCurrent
-                      ? "border-[#115040] bg-[#E8F2EE]/50 shadow-sm ring-1 ring-[#115040]"
-                      : "border-[#DCE5E1] bg-white hover:border-[#115040]/40"
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#115040]/10 text-[#115040]">
-                        {p.badge}
-                      </span>
-                      {isCurrent && (
-                        <span className="text-[11px] font-bold text-[#115040] flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          Actuel
-                        </span>
-                      )}
-                    </div>
-
-                    <h4 className="font-heading text-sm font-bold text-[#0B2920]">
-                      {p.name}
-                    </h4>
-                    <p className="text-[11px] text-[#526B63] leading-snug">
-                      {p.description}
-                    </p>
-
-                    <div className="pt-2 font-heading text-lg font-bold text-[#0B2920] tabular-nums">
-                      {formatGNF(p.monthly_price)}
-                      <span className="text-xs font-normal text-[#526B63]"> /mois</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-[#EEF3F1] space-y-1.5">
-                      <div className="text-[11px] font-semibold text-[#115040]">
-                        {p.allowed_apps.length} modules inclus :
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {p.allowed_apps.map((appId) => {
-                          const appDef = LUUMO_APPS.find((a) => a.id === appId);
-                          return (
-                            <span
-                              key={appId}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#DCE5E1] text-[#0B2920]"
-                            >
-                              {appDef?.shortName ?? appId}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    {isCurrent ? (
-                      <div className="w-full py-2 rounded-xl bg-[#115040]/10 text-[#115040] text-xs font-bold text-center">
-                        Forfait Actif
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setUpgradeTarget(p)}
-                        className="w-full py-2 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
-                      >
-                        Passer à ce forfait
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
-      {/* Modal Surclassement Forfait */}
+      {/* Modal Règlement Mobile Money */}
+      <Modal
+        open={payModalOpen}
+        onClose={() => setPayModalOpen(false)}
+        title="Payer mon abonnement par Mobile Money"
+      >
+        <form onSubmit={handlePaySubscription} className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-[#FEFBF2] border border-[#F3BC33]/40 text-xs flex items-center justify-between">
+            <div>
+              <span className="text-[#8F5E00] font-semibold block">
+                {currentPlan?.name}
+              </span>
+              <span className="text-[#526B63]">
+                Tarif : {formatGNF(currentPlan?.monthly_price ?? 0)} / mois
+              </span>
+            </div>
+            <ShieldCheck className="w-6 h-6 text-[#115040]" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0B2920] mb-2">
+              Opérateur Mobile Money (Guinée)
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setProvider("orange_money")}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  provider === "orange_money"
+                    ? "border-[#FF7900] bg-[#FFF5EB] ring-1 ring-[#FF7900]"
+                    : "border-[#DCE5E1] bg-white hover:bg-[#F7F9F8]"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="w-3 h-3 rounded-full bg-[#FF7900]" />
+                  {provider === "orange_money" && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#FF7900]" />
+                  )}
+                </div>
+                <div className="text-xs font-bold text-[#0B2920]">Orange Money</div>
+                <div className="text-[10px] text-[#526B63]">Validation *144#</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setProvider("mtn_momo")}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  provider === "mtn_momo"
+                    ? "border-[#FFCC00] bg-[#FFFDEB] ring-1 ring-[#FFCC00]"
+                    : "border-[#DCE5E1] bg-white hover:bg-[#F7F9F8]"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="w-3 h-3 rounded-full bg-[#FFCC00]" />
+                  {provider === "mtn_momo" && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#B78103]" />
+                  )}
+                </div>
+                <div className="text-xs font-bold text-[#0B2920]">MTN MoMo</div>
+                <div className="text-[10px] text-[#526B63]">Validation *440#</div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0B2920] mb-2">
+              Durée de l&apos;abonnement
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setDurationMonths(1)}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  durationMonths === 1
+                    ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
+                    : "border-[#DCE5E1] bg-white"
+                }`}
+              >
+                <div className="text-xs font-bold text-[#0B2920]">1 Mois</div>
+                <div className="font-heading text-xs font-bold text-[#115040] mt-0.5">
+                  {formatGNF(currentPlan?.monthly_price ?? 0)}
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDurationMonths(12)}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                  durationMonths === 12
+                    ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
+                    : "border-[#DCE5E1] bg-white"
+                }`}
+              >
+                <span className="absolute -top-2 right-2 px-1.5 py-0.2 bg-[#F3BC33] text-[#0B2920] text-[9px] font-bold rounded">
+                  2 MOIS OFFERTS
+                </span>
+                <div className="text-xs font-bold text-[#0B2920]">1 An (12 Mois)</div>
+                <div className="font-heading text-xs font-bold text-[#115040] mt-0.5">
+                  {formatGNF((currentPlan?.monthly_price ?? 0) * 10)}
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#0B2920] mb-1">
+              Numéro de téléphone (+224)
+            </label>
+            <input
+              type="tel"
+              required
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+224 620 00 00 00"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCE5E1] text-sm text-[#0B2920] font-mono"
+            />
+            <p className="text-[11px] text-[#526B63] mt-1">
+              Une notification USSD sera envoyée sur ce numéro pour validation par code PIN.
+            </p>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setPayModalOpen(false)}
+              className="px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={paying}
+              className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {paying ? (
+                "Validation Mobile Money..."
+              ) : (
+                <>
+                  <span>
+                    Confirmer et Payer{" "}
+                    {formatGNF(
+                      durationMonths === 12
+                        ? (currentPlan?.monthly_price ?? 0) * 10
+                        : (currentPlan?.monthly_price ?? 0) * durationMonths
+                    )}
+                  </span>
+                  <Zap className="w-3.5 h-3.5 text-[#F3BC33]" />
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Surclassement */}
       <Modal
         open={upgradeTarget !== null}
         onClose={() => setUpgradeTarget(null)}
@@ -438,7 +540,7 @@ export default function AppsManagerPage() {
       >
         {upgradeTarget && (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-[#FEFBF2] border border-[#F3BC33]/40 text-xs space-y-2">
+            <div className="p-4 rounded-xl bg-[#FEFBF2] border border-[#F3BC33]/40 text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[#8F5E00]">
                   {upgradeTarget.name}
@@ -450,41 +552,10 @@ export default function AppsManagerPage() {
               <p className="text-[#526B63]">{upgradeTarget.description}</p>
             </div>
 
-            <div className="space-y-2">
-              <div className="text-xs font-semibold text-[#0B2920]">
-                Applications débloquées immédiatement :
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {upgradeTarget.allowed_apps.map((appId) => {
-                  const appDef = LUUMO_APPS.find((a) => a.id === appId);
-                  const isNew = !allowedApps.includes(appId);
-                  return (
-                    <div
-                      key={appId}
-                      className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
-                        isNew
-                          ? "border-[#115040] bg-[#E8F2EE] font-semibold text-[#115040]"
-                          : "border-[#DCE5E1] bg-[#F7F9F8] text-[#526B63]"
-                      }`}
-                    >
-                      <span>{appDef?.name ?? appId}</span>
-                      {isNew && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#115040] text-[#F3BC33]">
-                          NOUVEAU
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-[#EEF3F1] text-xs text-[#115040] flex items-center gap-2">
-              <Zap className="w-4 h-4 shrink-0 text-[#F3BC33]" />
-              <span>
-                Activation instantanée sans interruption de service ni migration technique.
-              </span>
-            </div>
+            <p className="text-xs text-[#526B63]">
+              Votre compte sera immédiatement surclassé et toutes les applications incluses dans le{" "}
+              <strong>{upgradeTarget.name}</strong> seront ajoutées à votre écran d&apos;accueil.
+            </p>
 
             <div className="pt-2 flex items-center justify-end gap-2.5">
               <button
@@ -498,16 +569,115 @@ export default function AppsManagerPage() {
                 type="button"
                 disabled={upgrading}
                 onClick={handleConfirmUpgrade}
-                className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50 inline-flex items-center gap-2 shadow-xs"
+                className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50 inline-flex items-center gap-2"
               >
-                {upgrading ? (
-                  "Activation en cours..."
-                ) : (
-                  <>
-                    <span>Confirmer le surclassement</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-[#F3BC33]" />
-                  </>
-                )}
+                {upgrading ? "Activation..." : "Valider le surclassement"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Reçu de Facture imprimable */}
+      <Modal
+        open={selectedInvoice !== null}
+        onClose={() => setSelectedInvoice(null)}
+        title={selectedInvoice ? `Reçu de Facture ${selectedInvoice.number}` : "Reçu"}
+      >
+        {selectedInvoice && (
+          <div className="space-y-5 text-xs text-[#0B2920]">
+            {/* Zone de facture style papier */}
+            <div className="p-6 rounded-2xl bg-[#F6F8F7] border border-[#DCE5E1] space-y-5">
+              <div className="flex items-start justify-between border-b border-[#DCE5E1] pb-4">
+                <div>
+                  <div className="font-heading text-lg font-bold text-[#115040]">
+                    LUUMO ERP GUINÉE
+                  </div>
+                  <div className="text-[11px] text-[#526B63]">
+                    Solutions Logicielles PME & Commerce
+                  </div>
+                  <div className="text-[11px] text-[#526B63]">
+                    Conakry, République de Guinée
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-sm text-[#0B2920]">
+                    {selectedInvoice.number}
+                  </div>
+                  <div className="text-[11px] text-[#526B63]">
+                    Date : {selectedInvoice.date}
+                  </div>
+                  <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-[#E8F5E9] text-[#1B5E20] font-bold text-[10px]">
+                    ACQUITTÉE • PAYÉE
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-semibold text-[#526B63] uppercase">
+                  Client / Entreprise :
+                </div>
+                <div className="font-bold text-sm text-[#0B2920]">
+                  {subInfo?.current_plan.name ? "Votre Société" : "Client Luumo"}
+                </div>
+                <div className="text-[#526B63]">
+                  Règlement : {selectedInvoice.payment_method}
+                </div>
+              </div>
+
+              <div className="border border-[#DCE5E1] rounded-xl overflow-hidden bg-white">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#EEF3F1] text-[#526B63] font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-3">Désignation</th>
+                      <th className="py-2.5 px-3">Période</th>
+                      <th className="py-2.5 px-3 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-3 px-3 font-medium">
+                        Redevance logicielle {selectedInvoice.plan_name}
+                      </td>
+                      <td className="py-3 px-3 text-[#526B63]">
+                        {selectedInvoice.period}
+                      </td>
+                      <td className="py-3 px-3 text-right font-heading font-bold text-[#0B2920]">
+                        {formatGNF(selectedInvoice.amount)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-[11px] text-[#526B63]">
+                  TVA non applicable conformément au CGI.
+                </span>
+                <div className="text-right">
+                  <span className="text-xs text-[#526B63] mr-2">Net à payer :</span>
+                  <strong className="font-heading text-base font-bold text-[#115040]">
+                    {formatGNF(selectedInvoice.amount)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSelectedInvoice(null)}
+                className="px-4 py-2 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimer le reçu</span>
               </button>
             </div>
           </div>

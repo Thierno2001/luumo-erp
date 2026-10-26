@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { LogOut, Search, Sparkles, Store, SlidersHorizontal } from "lucide-react";
+import { LogOut, Search, Sparkles, Store, CreditCard } from "lucide-react";
 import { BrandAccentBar, LUUMO_APPS, LuumoLogo } from "@/components/ui";
 import { useSession } from "@/context/session";
 
@@ -26,11 +26,7 @@ export default function HomeAppSwitcherPage() {
 
   const currentPlan = session.user?.company?.plan;
   const allowedApps = currentPlan?.allowed_apps ?? LUUMO_APPS.map((a) => a.id);
-  const enabledApps = (
-    session.user?.company?.enabled_apps ?? allowedApps
-  ).filter((id) => allowedApps.includes(id));
-
-  const activeApps = LUUMO_APPS.filter((app) => enabledApps.includes(app.id));
+  const activeApps = LUUMO_APPS.filter((app) => allowedApps.includes(app.id));
 
   const filteredApps = activeApps.filter(
     (app) =>
@@ -75,11 +71,11 @@ export default function HomeAppSwitcherPage() {
 
           <Link
             href="/apps"
-            title="Gérer mon forfait et mes applications"
+            title="Gérer mon abonnement et factures"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-medium text-emerald-100 hover:text-white transition-colors"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-[#F3BC33]" />
-            <span className="hidden sm:inline">Mon Forfait</span>
+            <CreditCard className="w-3.5 h-3.5 text-[#F3BC33]" />
+            <span className="hidden sm:inline">Abonnement</span>
           </Link>
 
           <button
@@ -137,33 +133,6 @@ export default function HomeAppSwitcherPage() {
               );
             })}
           </div>
-
-          {/* Raccourci vers la personnalisation ou le surclassement de forfait */}
-          {allowedApps.length < LUUMO_APPS.length ? (
-            <div className="mt-12 text-center">
-              <Link
-                href="/apps"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-[#F3BC33]/30 text-xs text-[#F3BC33] hover:text-white transition-all shadow-xs"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>
-                  {currentPlan?.name ?? "Votre Forfait"} • {LUUMO_APPS.length - allowedApps.length} modules disponibles en option (Flotte, Achats...). Gérer mon forfait →
-                </span>
-              </Link>
-            </div>
-          ) : activeApps.length < LUUMO_APPS.length ? (
-            <div className="mt-12 text-center">
-              <Link
-                href="/apps"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-emerald-200/80 hover:text-white transition-all"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#F3BC33]" />
-                <span>
-                  {LUUMO_APPS.length - activeApps.length} application(s) masquée(s). Personnaliser l&apos;affichage →
-                </span>
-              </Link>
-            </div>
-          ) : null}
         </div>
       </main>
 

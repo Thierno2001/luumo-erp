@@ -16,6 +16,7 @@ from ..services.apps_service import (
     get_company_plan,
     get_company_subscription_info,
     init_company_profile_apps,
+    record_subscription_payment,
     set_company_enabled_apps,
     upgrade_company_plan,
 )
@@ -256,13 +257,18 @@ class LuumoAuthController(LuumoBaseController):
         request.session.logout(keep_db=True)
         return self._ok({'logged_out': True})
 
-    @luumo_route('/company/apps', ['GET'])
-    def get_company_apps(self):
-        """Récupère l'état complet du forfait et des applications autorisées/activées."""
+    @luumo_route('/company/subscription', ['GET'])
+    def get_company_subscription(self):
+        """Récupère l'état complet du forfait, de l'échéance et des factures d'abonnement."""
         def _do():
             env = request.env
             return self._ok(get_company_subscription_info(env, env.company))
         return self._guard(_do)
+
+    @luumo_route('/company/apps', ['GET'])
+    def get_company_apps(self):
+        """Compatibilité : alias vers /company/subscription."""
+        return self.get_company_subscription()
 
     @luumo_route('/company/apps', ['POST'])
     def update_company_apps(self):
@@ -277,6 +283,21 @@ class LuumoAuthController(LuumoBaseController):
             set_company_enabled_apps(env, company, apps)
             env.cr.commit()
             return self._ok(get_company_subscription_info(env, company))
+        return self._guard(_do)
+
+    @luumo_route('/company/subscription/pay', ['POST'])
+    def pay_company_subscription(self):
+        """Règlement de l'abonnement par Mobile Money (Orange Money / MTN MoMo)."""
+        def _do():
+            env = request.env
+            company = env.company
+            p = self._payload()
+            provider = clean_text(p.get('provider') or 'orange_money', "Opérateur", max_len=32)
+            phone = clean_text(p.get('phone') or '+224 620 00 00 00', "Numéro de téléphone", max_len=32)
+            months = int(p.get('months') or 1)
+            res = record_subscription_payment(env, company, provider=provider, phone=phone, months=months)
+            env.cr.commit()
+            return self._ok(res)
         return self._guard(_do)
 
     @luumo_route('/company/plan/upgrade', ['POST'])

@@ -14,6 +14,7 @@ type SessionContextValue = {
   logout: () => Promise<void>;
   updateEnabledApps: (apps: string[]) => Promise<void>;
   upgradePlan: (planId: BusinessPlanId) => Promise<void>;
+  paySubscription: (input: { provider: string; phone: string; months?: number }) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -103,6 +104,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const paySubscription = async (input: { provider: string; phone: string; months?: number }) => {
+    const res = await api.payCompanySubscription(input);
+    if (session) {
+      const updated: Session = {
+        ...session,
+        user: {
+          ...session.user,
+          company: {
+            ...session.user.company,
+            plan: res.current_plan,
+            enabled_apps: res.enabled_apps,
+          },
+        },
+      };
+      writeSession(updated);
+      setSession(updated);
+    }
+  };
+
   return (
     <SessionContext.Provider
       value={{
@@ -114,6 +134,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         logout,
         updateEnabledApps,
         upgradePlan,
+        paySubscription,
       }}
     >
       {children}

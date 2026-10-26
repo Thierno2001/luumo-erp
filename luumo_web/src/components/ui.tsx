@@ -25,6 +25,7 @@ import {
   Wifi,
   WifiOff,
   SlidersHorizontal,
+  CreditCard,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { useOfflineSync } from "@/lib/offline-sync";
@@ -222,16 +223,16 @@ export function getActiveApp(pathname: string | null): LuumoAppDefinition {
   if (pathname.startsWith("/apps")) {
     return {
       id: "apps",
-      name: "Mes Applications",
-      shortName: "Applications",
+      name: "Abonnement & Facturation",
+      shortName: "Abonnement",
       href: "/apps",
-      icon: SlidersHorizontal,
-      description: "Gestion des modules actifs de l'entreprise",
-      guineaUseCase: "Configuration",
+      icon: CreditCard,
+      description: "Suivi de votre forfait, règlement Mobile Money et factures acquittées",
+      guineaUseCase: "Facturation SaaS",
       odooModules: [],
       iconBg: "bg-[#115040] border-[#0B382C]",
       iconColor: "text-[#F3BC33]",
-      subMenus: [{ label: "Modules actifs", href: "/apps" }],
+      subMenus: [{ label: "Mon Abonnement & Factures", href: "/apps" }],
     };
   }
   const found = LUUMO_APPS.find((app) => pathname.startsWith(app.href));
@@ -625,11 +626,11 @@ export function AppShell({
 
             <Link
               href="/apps"
-              title="Gérer mes applications actives"
-              aria-label="Gérer mes applications actives"
+              title="Mon Abonnement & Factures"
+              aria-label="Mon Abonnement & Factures"
               className="p-2 rounded-lg text-emerald-100 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
             >
-              <SlidersHorizontal className="w-4 h-4 text-[#F3BC33]" />
+              <CreditCard className="w-4 h-4 text-[#F3BC33]" />
             </Link>
 
             <div className="flex items-center gap-2 pl-2 border-l border-white/15">

@@ -13,6 +13,7 @@ import {
 import type {
   BusinessPlanId,
   CompanyAppsResponse,
+  CompanySubscriptionInfo,
   CreateCustomerInput,
   CreateEmployeeInput,
   CreateExpenseInput,
@@ -374,6 +375,20 @@ export const api = {
   async getCompanyApps(): Promise<CompanyAppsResponse> {
     if (isDemo()) return demo.getCompanyApps();
     return (await get<CompanyAppsResponse>("/company/apps")).data;
+  },
+
+  async getCompanySubscription(): Promise<CompanySubscriptionInfo> {
+    if (isDemo()) return demo.getCompanySubscription();
+    return (await get<CompanySubscriptionInfo>("/company/subscription")).data;
+  },
+
+  async payCompanySubscription(input: {
+    provider: string;
+    phone: string;
+    months?: number;
+  }): Promise<CompanySubscriptionInfo> {
+    if (isDemo()) return demo.payCompanySubscription(input);
+    return (await post<CompanySubscriptionInfo>("/company/subscription/pay", input)).data;
   },
 
   async updateCompanyApps(enabled_apps: string[]): Promise<CompanyAppsResponse> {
