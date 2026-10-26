@@ -291,10 +291,10 @@ export default function SubscriptionBillingPage() {
             <div>
               <h3 className="font-heading text-lg font-bold text-[#0B2920] flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#F3BC33]" />
-                <span>Changer de Forfait (Évolution de votre activité)</span>
+                <span>Changer de Forfait</span>
               </h3>
               <p className="text-xs text-[#526B63] mt-0.5">
-                Besoin de gérer un parc de camions ou des achats à l&apos;import ? Passez à la formule supérieure en 1 clic.
+                Faites évoluer votre formule selon la croissance et les besoins de votre activité.
               </p>
             </div>
 
@@ -338,14 +338,14 @@ export default function SubscriptionBillingPage() {
 
                       <div className="pt-2 border-t border-[#EEF3F1] space-y-1">
                         <div className="text-[11px] font-semibold text-[#115040]">
-                          {p.allowed_apps.length} applications incluses :
+                          Applications incluses :
                         </div>
                         <div className="text-[11px] text-[#526B63]">
                           {p.id === "wholesale"
-                            ? "Caisse, Ventes, Stock, Achats, Clients, RH & Flotte"
+                            ? "Caisse, Facturation, Stocks, Achats, Flotte & Salaires"
                             : p.id === "services"
-                              ? "Ventes B2B, Clients, RH/Frais & Dashboard"
-                              : "Caisse POS, Inventaire Stock, Clients & Dashboard"}
+                              ? "Facturation, Devis, Clients, Personnel & Dépenses"
+                              : "Caisse, Gestion des stocks, Crédits clients & Bilan"}
                         </div>
                       </div>
                     </div>
@@ -440,7 +440,7 @@ export default function SubscriptionBillingPage() {
 
           <div>
             <label className="block text-xs font-semibold text-[#0B2920] mb-2">
-              Durée de l&apos;abonnement
+              Période de renouvellement
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -452,8 +452,9 @@ export default function SubscriptionBillingPage() {
                     : "border-[#DCE5E1] bg-white"
                 }`}
               >
-                <div className="text-xs font-bold text-[#0B2920]">1 Mois</div>
-                <div className="font-heading text-xs font-bold text-[#115040] mt-0.5">
+                <div className="text-xs font-bold text-[#0B2920]">Formule Mensuelle</div>
+                <div className="text-[11px] text-[#526B63]">Paiement par mois</div>
+                <div className="font-heading text-xs font-bold text-[#115040] mt-1">
                   {formatGNF(currentPlan?.monthly_price ?? 0)}
                 </div>
               </button>
@@ -467,11 +468,12 @@ export default function SubscriptionBillingPage() {
                     : "border-[#DCE5E1] bg-white"
                 }`}
               >
-                <span className="absolute -top-2 right-2 px-1.5 py-0.2 bg-[#F3BC33] text-[#0B2920] text-[9px] font-bold rounded">
+                <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-[#F3BC33] text-[#0B2920] text-[9px] font-bold rounded">
                   2 MOIS OFFERTS
                 </span>
-                <div className="text-xs font-bold text-[#0B2920]">1 An (12 Mois)</div>
-                <div className="font-heading text-xs font-bold text-[#115040] mt-0.5">
+                <div className="text-xs font-bold text-[#0B2920]">Formule Annuelle</div>
+                <div className="text-[11px] text-[#526B63]">Paiement sur 12 mois</div>
+                <div className="font-heading text-xs font-bold text-[#115040] mt-1">
                   {formatGNF((currentPlan?.monthly_price ?? 0) * 10)}
                 </div>
               </button>

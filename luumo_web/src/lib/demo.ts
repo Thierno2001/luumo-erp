@@ -35,27 +35,27 @@ import type {
 export const DEMO_PLANS: Record<BusinessPlanId, CompanyPlan> = {
   retail: {
     id: "retail",
-    name: "Forfait Boutique & Caisse",
+    name: "Forfait Boutique",
     allowed_apps: ["pos", "inventory", "customers", "dashboard"],
     monthly_price: 150000,
-    description: "Idéal pour le commerce de détail, supérettes, pharmacies et quincailleries.",
-    badge: "Starter",
+    description: "Commerce de détail, supérettes, pharmacies et quincailleries.",
+    badge: "Boutique",
   },
   services: {
     id: "services",
-    name: "Forfait Pro Services & B2B",
+    name: "Forfait Services",
     allowed_apps: ["orders", "customers", "hr", "dashboard"],
     monthly_price: 250000,
-    description: "Idéal pour prestataires, cabinets, transitaires et agences de service.",
-    badge: "Pro B2B",
+    description: "Sociétés de prestations, agences, cabinets et maintenance.",
+    badge: "Services",
   },
   wholesale: {
     id: "wholesale",
-    name: "Forfait Grossiste & Entreprise",
+    name: "Forfait Grossiste",
     allowed_apps: ["pos", "orders", "dashboard", "inventory", "purchases", "customers", "hr", "fleet"],
     monthly_price: 450000,
-    description: "Suite complète 360° avec parc de camions, livraisons, achats conteneurs et RH.",
-    badge: "Illimité 360°",
+    description: "Grossistes, dépôts de distribution, importateurs et logistique.",
+    badge: "Grossiste",
   },
 };
 

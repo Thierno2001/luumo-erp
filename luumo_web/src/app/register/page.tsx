@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Eye,
   EyeOff,
+  ChevronDown,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
@@ -135,77 +136,32 @@ export default function RegisterCompanyPage() {
               </div>
             </div>
 
-            {/* Niveau 1 : Profil métier & sélection modulaire */}
+            {/* Activité principale de l'entreprise */}
             <div>
-              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
-                Profil métier & Applications initiales
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1">
+                Activité principale de votre entreprise
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setBusinessProfile("retail")}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    businessProfile === "retail"
-                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
-                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
-                  }`}
+              <div className="relative">
+                <Briefcase className="w-4 h-4 text-[#526B63] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={businessProfile}
+                  onChange={(e) => setBusinessProfile(e.target.value as BusinessProfile)}
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-[#DCE5E1] bg-[#F7F9F8] text-sm text-[#0B2920] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#115040] appearance-none cursor-pointer"
                 >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Store className="w-4 h-4 text-[#115040]" />
-                    {businessProfile === "retail" && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
-                    )}
-                  </div>
-                  <div className="text-xs font-bold text-[#0B2920]">Boutique & Caisse</div>
-                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
-                    Détail, superette, pharmacie (4 apps)
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setBusinessProfile("wholesale")}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    businessProfile === "wholesale"
-                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
-                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Building2 className="w-4 h-4 text-[#115040]" />
-                    {businessProfile === "wholesale" && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
-                    )}
-                  </div>
-                  <div className="text-xs font-bold text-[#0B2920]">Grossiste & Import</div>
-                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
-                    Madina, dépôt, camions (8 apps)
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setBusinessProfile("services")}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    businessProfile === "services"
-                      ? "border-[#115040] bg-[#E8F2EE] ring-1 ring-[#115040]"
-                      : "border-[#DCE5E1] bg-[#F7F9F8] hover:bg-white"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Briefcase className="w-4 h-4 text-[#115040]" />
-                    {businessProfile === "services" && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#115040]" />
-                    )}
-                  </div>
-                  <div className="text-xs font-bold text-[#0B2920]">Prestations & B2B</div>
-                  <div className="text-[11px] text-[#526B63] mt-0.5 leading-tight">
-                    Services, transit, agence (4 apps)
-                  </div>
-                </button>
+                  <option value="retail">
+                    Commerce et vente au détail (Boutique, Supérette, Pharmacie, Quincaillerie)
+                  </option>
+                  <option value="wholesale">
+                    Commerce de gros et distribution (Dépôt, Grossiste, Matériaux, Importation)
+                  </option>
+                  <option value="services">
+                    Prestations de services et entreprises (Société, Cabinet, Transport, Maintenance)
+                  </option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-[#526B63] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
               <p className="text-[11px] text-[#526B63] mt-1.5">
-                Vous pourrez activer ou masquer d&apos;autres applications à tout moment dans vos paramètres.
+                Vos applications seront automatiquement adaptées à votre domaine d&apos;activité.
               </p>
             </div>
 

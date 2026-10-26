@@ -78,7 +78,7 @@ export default function LoginPage() {
                     Caisse &amp; Facturation rapides
                   </h2>
                   <p className="text-xs text-emerald-100/75 mt-0.5">
-                    Encaissement comptoir ou B2B en Espèces, Orange Money, MTN MoMo, Banque et Crédit.
+                    Encaissement comptoir ou sur facture en Espèces, Orange Money, MTN MoMo, Banque et Crédit.
                   </p>
                 </div>
               </div>

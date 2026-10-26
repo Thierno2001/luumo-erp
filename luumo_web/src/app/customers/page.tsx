@@ -204,7 +204,7 @@ export default function CustomersPage() {
           <KpiCard
             label="Partenaires enregistrés"
             value={`${stats.total} fiches`}
-            sublabel={`Dont ${stats.companiesCount} entreprise(s) B2B et ${stats.total - stats.companiesCount} particulier(s)`}
+            sublabel={`Dont ${stats.companiesCount} entreprise(s) et ${stats.total - stats.companiesCount} particulier(s)`}
             icon={<Users className="w-5 h-5" />}
           />
           <KpiCard
@@ -309,7 +309,7 @@ export default function CustomersPage() {
                         {c.is_company ? (
                           <div className="space-y-0.5">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FEF6DF] text-[#8F5E00] font-semibold text-[11px]">
-                              Entreprise B2B
+                              Entreprise
                             </span>
                             {c.vat && (
                               <div className="font-mono text-[11px] text-[#526B63]">
@@ -384,7 +384,7 @@ export default function CustomersPage() {
             <div className="p-4 rounded-xl bg-[#115040] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <p className="text-xs text-emerald-200/80">
-                  {selected.is_company ? "Entreprise B2B" : "Client Particulier"}
+                  {selected.is_company ? "Entreprise" : "Client Particulier"}
                   {selected.vat ? ` • ${selected.vat}` : ""} •{" "}
                   {selected.phone || "Sans téléphone"} • {selected.city || "Conakry"}
                 </p>
