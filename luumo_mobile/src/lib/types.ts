@@ -5,11 +5,38 @@ export type Currency = {
   position: "before" | "after";
 };
 
+export type BusinessPlanId = "retail" | "wholesale" | "services";
+
+export type CompanyPlan = {
+  id: BusinessPlanId;
+  name: string;
+  allowed_apps: string[];
+  monthly_price: number;
+  description: string;
+  badge?: string;
+};
+
+export type CompanySubscriptionInfo = {
+  current_plan: CompanyPlan;
+  allowed_apps: string[];
+  enabled_apps: string[];
+  status: "active" | "trial" | "past_due" | "expired";
+  current_period_end: string;
+  days_remaining: number;
+  plans: Record<BusinessPlanId, CompanyPlan>;
+};
+
 export type User = {
   id: number;
   name: string;
   login: string;
-  company: { id: number; name: string };
+  company: {
+    id: number;
+    name: string;
+    plan?: CompanyPlan;
+    enabled_apps?: string[];
+    subscription?: CompanySubscriptionInfo;
+  };
 };
 
 export type Product = {

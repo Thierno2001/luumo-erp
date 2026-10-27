@@ -2,6 +2,7 @@ import React from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { MobileSessionProvider } from "@/context/session";
+import { MobileTrialExpiredBlocker } from "@/components/trial-expired-blocker";
 import { colors } from "@/theme";
 
 export default function RootLayout() {
@@ -12,6 +13,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
       </Stack>
+      <MobileTrialExpiredBlocker />
     </MobileSessionProvider>
   );
 }

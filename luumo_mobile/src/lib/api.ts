@@ -5,6 +5,7 @@
  */
 import { demo, DEMO_CURRENCY, DEMO_USER } from "./demo";
 import type {
+  CompanySubscriptionInfo,
   CreateOrderInput,
   Currency,
   Customer,
@@ -24,6 +25,11 @@ export type MobileSession = {
 };
 
 let currentSession: MobileSession | null = null;
+let onTrialExpiredHandler: (() => void) | null = null;
+
+export function setOnTrialExpired(handler: (() => void) | null) {
+  onTrialExpiredHandler = handler;
+}
 
 export function getMobileSession(): MobileSession | null {
   return currentSession;
@@ -48,6 +54,15 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const body = (await res.json()) as Envelope<T>;
+  if (res.status === 402) {
+    if (onTrialExpiredHandler) {
+      onTrialExpiredHandler();
+    }
+    throw new Error(
+      body.error ||
+        "Votre période d'essai de 14 jours a pris fin. Veuillez régulariser votre abonnement via Orange Money."
+    );
+  }
   if (!res.ok || !body.success) {
     throw new Error(body.error || `Erreur serveur (${res.status})`);
   }
@@ -163,6 +178,63 @@ export const mobileApi = {
     return call<Order>("/orders/create", {
       method: "POST",
       body: JSON.stringify({ deliver: true, ...input }),
+    });
+  },
+
+  async getSubscription(): Promise<CompanySubscriptionInfo> {
+    if (currentSession?.mode === "demo") {
+      return {
+        current_plan: {
+          id: "retail",
+          name: "Forfait Boutique",
+          allowed_apps: ["pos", "inventory", "customers", "dashboard"],
+          monthly_price: 150000,
+          description: "Commerce de détail et supérettes.",
+        },
+        allowed_apps: ["pos", "inventory", "customers", "dashboard"],
+        enabled_apps: ["pos", "inventory", "customers", "dashboard"],
+        status: "active",
+        current_period_end: "2026-11-30",
+        days_remaining: 30,
+        plans: {
+          retail: {
+            id: "retail",
+            name: "Forfait Boutique",
+            allowed_apps: ["pos", "inventory", "customers", "dashboard"],
+            monthly_price: 150000,
+            description: "Commerce de détail et supérettes.",
+          },
+          services: {
+            id: "services",
+            name: "Forfait Services",
+            allowed_apps: ["orders", "customers", "hr", "dashboard"],
+            monthly_price: 250000,
+            description: "Sociétés de prestations et agences.",
+          },
+          wholesale: {
+            id: "wholesale",
+            name: "Forfait Grossiste",
+            allowed_apps: ["pos", "orders", "dashboard", "inventory", "purchases", "customers", "hr", "fleet"],
+            monthly_price: 450000,
+            description: "Grossistes et distributeurs avec flotte.",
+          },
+        },
+      };
+    }
+    return call<CompanySubscriptionInfo>("/company/subscription");
+  },
+
+  async paySubscription(input: {
+    provider: string;
+    phone: string;
+    months?: number;
+  }): Promise<CompanySubscriptionInfo> {
+    if (currentSession?.mode === "demo") {
+      return this.getSubscription();
+    }
+    return call<CompanySubscriptionInfo>("/company/subscription/pay", {
+      method: "POST",
+      body: JSON.stringify(input),
     });
   },
 };
