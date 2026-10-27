@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { BrandAccentBar, LUUMO_APPS, LuumoLogo } from "@/components/ui";
 import { AppTotemIcon } from "@/components/app-totem-icon";
+import { LuumoLandingPage } from "@/components/landing-page";
 import { useSession } from "@/context/session";
 
 const APP_TAGLINES: Record<string, string> = {
@@ -19,15 +20,20 @@ const APP_TAGLINES: Record<string, string> = {
 };
 
 export default function HomeAppSwitcherPage() {
-  const { session, logout } = useSession();
+  const { session, logout, ready } = useSession();
   const [query, setQuery] = useState("");
 
-  if (!session) {
+  if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F7F9F8]">
-        <div className="w-8 h-8 rounded-full border-3 border-[#115040] border-t-transparent animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#071913]">
+        <div className="w-8 h-8 rounded-full border-3 border-[#0B6E4F] border-t-transparent animate-spin" />
       </div>
     );
+  }
+
+  // Visiteur non connecté : affichage de la Landing Page vitrine
+  if (!session) {
+    return <LuumoLandingPage />;
   }
 
   const currentPlan = session.user?.company?.plan;
@@ -67,6 +73,12 @@ export default function HomeAppSwitcherPage() {
           {session.mode === "demo" && (
             <span className="text-[#F3BC33] font-bold">
               ★ Mode Démo
+            </span>
+          )}
+
+          {session.user.company.subscription?.status === "trial" && (
+            <span className="text-[#0B6E4F] font-semibold bg-[#E8F5EE] px-2.5 py-0.5 rounded-full border border-[#C6E6D5] text-[11px]">
+              Essai : {session.user.company.subscription.days_remaining}j restants
             </span>
           )}
 

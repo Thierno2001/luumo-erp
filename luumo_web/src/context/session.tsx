@@ -3,11 +3,13 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, readSession, writeSession, type Session } from "@/lib/api";
-import type { BusinessPlanId, RegisterCompanyInput } from "@/lib/types";
+import type { BusinessPlanId, CompanySubscriptionInfo, RegisterCompanyInput } from "@/lib/types";
 
 type SessionContextValue = {
   session: Session | null;
   ready: boolean;
+  isTrialExpired: boolean;
+  subscription: CompanySubscriptionInfo | null;
   login: (login: string, password: string) => Promise<void>;
   registerCompany: (input: RegisterCompanyInput) => Promise<void>;
   startDemo: () => void;
@@ -15,6 +17,7 @@ type SessionContextValue = {
   updateEnabledApps: (apps: string[]) => Promise<void>;
   upgradePlan: (planId: BusinessPlanId) => Promise<void>;
   paySubscription: (input: { provider: string; phone: string; months?: number }) => Promise<void>;
+  refreshSubscription: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -22,6 +25,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [forceTrialExpired, setForceTrialExpired] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -32,12 +36,33 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const onTrialExpiredEvent = () => {
+      setForceTrialExpired(true);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("luumo:trial_expired", onTrialExpiredEvent);
+      return () => {
+        window.removeEventListener("luumo:trial_expired", onTrialExpiredEvent);
+      };
+    }
+  }, []);
+
+  const sub = session?.user?.company?.subscription ?? null;
+  const isTrialExpired =
+    forceTrialExpired ||
+    (session?.mode === "live" &&
+      sub != null &&
+      (sub.status === "expired" ||
+        sub.status === "past_due" ||
+        (sub.status === "trial" && sub.days_remaining <= 0)));
+
+  useEffect(() => {
     if (!ready) return;
-    const onAuthPage =
-      pathname?.startsWith("/login") || pathname?.startsWith("/register");
-    if (!session && !onAuthPage) {
+    const isPublicPage =
+      pathname === "/" || pathname?.startsWith("/login") || pathname?.startsWith("/register");
+    if (!session && !isPublicPage) {
       router.replace("/login");
-    } else if (session && onAuthPage) {
+    } else if (session && (pathname?.startsWith("/login") || pathname?.startsWith("/register"))) {
       router.replace("/");
     }
   }, [ready, session, pathname, router]);
@@ -106,6 +131,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const paySubscription = async (input: { provider: string; phone: string; months?: number }) => {
     const res = await api.payCompanySubscription(input);
+    setForceTrialExpired(false);
     if (session) {
       const updated: Session = {
         ...session,
@@ -115,6 +141,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             ...session.user.company,
             plan: res.current_plan,
             enabled_apps: res.enabled_apps,
+            subscription: res,
           },
         },
       };
@@ -123,11 +150,43 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshSubscription = async () => {
+    if (session?.mode === "live") {
+      try {
+        const subInfo = await api.getCompanySubscription();
+        if (
+          subInfo.status === "active" ||
+          (subInfo.status === "trial" && subInfo.days_remaining > 0)
+        ) {
+          setForceTrialExpired(false);
+        }
+        const updated: Session = {
+          ...session,
+          user: {
+            ...session.user,
+            company: {
+              ...session.user.company,
+              plan: subInfo.current_plan,
+              enabled_apps: subInfo.enabled_apps,
+              subscription: subInfo,
+            },
+          },
+        };
+        writeSession(updated);
+        setSession(updated);
+      } catch {
+        // Silencieux
+      }
+    }
+  };
+
   return (
     <SessionContext.Provider
       value={{
         session,
         ready,
+        isTrialExpired,
+        subscription: sub,
         login,
         registerCompany,
         startDemo,
@@ -135,6 +194,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         updateEnabledApps,
         upgradePlan,
         paySubscription,
+        refreshSubscription,
       }}
     >
       {children}

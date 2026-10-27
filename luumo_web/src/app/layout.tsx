@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Rubik } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/context/session";
+import { TrialExpiredBlocker } from "@/components/trial-expired-blocker";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -31,7 +32,10 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${outfit.variable} ${rubik.variable}`}>
       <body className="min-h-screen bg-[#F7F9F8] text-[#0B2920]">
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          {children}
+          <TrialExpiredBlocker />
+        </SessionProvider>
       </body>
     </html>
   );

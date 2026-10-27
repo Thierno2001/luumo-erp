@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Building2,
   Store,
@@ -17,6 +18,7 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
@@ -25,9 +27,17 @@ import type { BusinessProfile } from "@/lib/types";
 
 export default function RegisterCompanyPage() {
   const { registerCompany } = useSession();
+  const searchParams = useSearchParams();
 
   const [companyName, setCompanyName] = useState("");
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>("retail");
+
+  useEffect(() => {
+    const plan = searchParams.get("plan");
+    if (plan === "retail" || plan === "wholesale" || plan === "services") {
+      setBusinessProfile(plan);
+    }
+  }, [searchParams]);
   const [city, setCity] = useState("Conakry");
   const [phone, setPhone] = useState("+224 ");
   const [adminName, setAdminName] = useState("");
@@ -102,8 +112,12 @@ export default function RegisterCompanyPage() {
           </div>
 
           <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F5EE] border border-[#C6E6D5] text-xs font-semibold text-[#0B6E4F] mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-[#F2B705]" />
+              <span>14 jours d&apos;essai gratuit inclus • Sans carte bancaire</span>
+            </div>
             <h1 className="font-heading text-2xl font-bold text-[#0B2920]">
-              Créer votre compte entreprise
+              Créer votre compte Luumo
             </h1>
             <p className="text-xs sm:text-sm text-[#526B63] mt-1">
               Renseignez les informations essentielles de votre activité pour accéder à vos applications.

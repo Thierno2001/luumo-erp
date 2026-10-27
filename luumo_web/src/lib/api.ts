@@ -94,6 +94,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<Envelope<T>
     }
     throw new ApiError(body?.error ?? "Session expirée", 401);
   }
+  if (res.status === 402) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("luumo:trial_expired", { detail: body }));
+    }
+    throw new ApiError(
+      body?.error ?? "Votre période d'essai de 14 jours est terminée. Veuillez régulariser votre abonnement par Orange Money.",
+      402
+    );
+  }
   if (!res.ok || !body?.success) {
     const fallback = res.status >= 500 ? "Le serveur Luumo ne répond pas correctement." : `Erreur ${res.status}`;
     throw new ApiError(body?.error ?? fallback, res.status);

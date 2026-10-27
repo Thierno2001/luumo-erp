@@ -32,7 +32,7 @@ export type CompanySubscriptionInfo = {
   current_plan: CompanyPlan;
   allowed_apps: string[];
   enabled_apps: string[];
-  status: "active" | "trial" | "past_due";
+  status: "active" | "trial" | "past_due" | "expired";
   current_period_end: string;
   days_remaining: number;
   plans: Record<BusinessPlanId, CompanyPlan>;
@@ -50,6 +50,7 @@ export type User = {
     name: string;
     plan?: CompanyPlan;
     enabled_apps?: string[];
+    subscription?: CompanySubscriptionInfo;
   };
 };
 

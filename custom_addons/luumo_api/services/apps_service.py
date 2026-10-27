@@ -113,10 +113,19 @@ def get_company_subscription_info(env, company):
     status_key = f'luumo_sub_status_{company.id}'
     status = env['ir.config_parameter'].sudo().get_param(status_key, default=None)
     if not status:
-        status = 'active'
+        status = 'active' if company.id == 1 else 'trial'
         env['ir.config_parameter'].sudo().set_param(status_key, status)
 
     days_remaining = max(0, (period_end - today).days)
+
+    # Vérification automatique de l'expiration des 14 jours d'essai ou de l'abonnement
+    if today > period_end or days_remaining == 0:
+        if status == 'trial':
+            status = 'expired'
+            env['ir.config_parameter'].sudo().set_param(status_key, status)
+        elif status == 'active':
+            status = 'past_due'
+            env['ir.config_parameter'].sudo().set_param(status_key, status)
 
     # Factures d'abonnement
     invoices_key = f'luumo_sub_invoices_{company.id}'
@@ -229,3 +238,25 @@ def init_company_profile_apps(env, company, profile='wholesale'):
     env['ir.config_parameter'].sudo().set_param(f'luumo_sub_period_end_{company.id}', fields.Date.to_string(trial_end))
     env['ir.config_parameter'].sudo().set_param(f'luumo_sub_status_{company.id}', 'trial')
     return plan
+
+
+def is_subscription_active(env, company):
+    """Vérifie si l'accès aux fonctionnalités métier Luumo est autorisé.
+    Bloque strictement l'accès si la période d'essai de 14 jours est terminée sans paiement Mobile Money.
+    """
+    if not company:
+        return False
+    if env.user.id == 1:
+        return True
+
+    info = get_company_subscription_info(env, company)
+    today = fields.Date.today()
+    try:
+        period_end = fields.Date.from_string(info['current_period_end'])
+    except Exception:
+        return False
+
+    if today > period_end or info['status'] in ('expired', 'past_due'):
+        return False
+    return info['status'] in ('active', 'trial')
+

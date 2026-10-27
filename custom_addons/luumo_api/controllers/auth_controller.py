@@ -83,6 +83,7 @@ class LuumoAuthController(LuumoBaseController):
         request.env.cr.commit()
         plan = get_company_plan(request.env, user.company_id)
         enabled_apps = get_company_enabled_apps(request.env, user.company_id)
+        subscription = get_company_subscription_info(request.env, user.company_id)
         return self._ok({
             'session_id': request.session.sid,
             'user': {
@@ -94,6 +95,7 @@ class LuumoAuthController(LuumoBaseController):
                     'name': user.company_id.name,
                     'plan': plan,
                     'enabled_apps': enabled_apps,
+                    'subscription': subscription,
                 },
             },
             'currency': self._currency(),
@@ -207,6 +209,7 @@ class LuumoAuthController(LuumoBaseController):
 
             plan = get_company_plan(su_env, company)
             enabled_apps = get_company_enabled_apps(su_env, company)
+            subscription = get_company_subscription_info(su_env, company)
             return self._ok({
                 'session_id': request.session.sid,
                 'user': {
@@ -218,6 +221,7 @@ class LuumoAuthController(LuumoBaseController):
                         'name': company.name,
                         'plan': plan,
                         'enabled_apps': enabled_apps,
+                        'subscription': subscription,
                     },
                 },
                 'currency': self._currency(),
@@ -236,6 +240,7 @@ class LuumoAuthController(LuumoBaseController):
             user = request.env.user
             plan = get_company_plan(request.env, user.company_id)
             enabled_apps = get_company_enabled_apps(request.env, user.company_id)
+            subscription = get_company_subscription_info(request.env, user.company_id)
             return self._ok({
                 'user': {
                     'id': user.id,
@@ -246,11 +251,12 @@ class LuumoAuthController(LuumoBaseController):
                         'name': user.company_id.name,
                         'plan': plan,
                         'enabled_apps': enabled_apps,
+                        'subscription': subscription,
                     },
                 },
                 'currency': self._currency(),
             })
-        return self._guard(_do)
+        return self._guard(_do, check_subscription=False)
 
     @luumo_route('/auth/logout', ['POST'])
     def auth_logout(self):
@@ -263,7 +269,7 @@ class LuumoAuthController(LuumoBaseController):
         def _do():
             env = request.env
             return self._ok(get_company_subscription_info(env, env.company))
-        return self._guard(_do)
+        return self._guard(_do, check_subscription=False)
 
     @luumo_route('/company/apps', ['GET'])
     def get_company_apps(self):
@@ -283,7 +289,7 @@ class LuumoAuthController(LuumoBaseController):
             set_company_enabled_apps(env, company, apps)
             env.cr.commit()
             return self._ok(get_company_subscription_info(env, company))
-        return self._guard(_do)
+        return self._guard(_do, check_subscription=False)
 
     @luumo_route('/company/subscription/pay', ['POST'])
     def pay_company_subscription(self):
@@ -298,7 +304,7 @@ class LuumoAuthController(LuumoBaseController):
             res = record_subscription_payment(env, company, provider=provider, phone=phone, months=months)
             env.cr.commit()
             return self._ok(res)
-        return self._guard(_do)
+        return self._guard(_do, check_subscription=False)
 
     @luumo_route('/company/plan/upgrade', ['POST'])
     def upgrade_company_plan(self):
@@ -313,4 +319,4 @@ class LuumoAuthController(LuumoBaseController):
                 return self._error("Forfait sélectionné invalide.", 400)
             env.cr.commit()
             return self._ok(get_company_subscription_info(env, company))
-        return self._guard(_do)
+        return self._guard(_do, check_subscription=False)
