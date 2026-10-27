@@ -41,32 +41,119 @@ export function setMobileSession(s: MobileSession | null) {
 
 type Envelope<T> = { success: boolean; data: T; error?: string };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!currentSession) throw new Error("Non connecté");
-  const base = currentSession.serverUrl.replace(/\/+$/, "");
-  const res = await fetch(`${base}/api/luumo/v1${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Cookie: `session_id=${currentSession.sessionId}`,
-      ...init?.headers,
-    },
-  });
-  const body = (await res.json()) as Envelope<T>;
-  if (res.status === 402) {
-    if (onTrialExpiredHandler) {
-      onTrialExpiredHandler();
+type MobileCacheEntry<T> = {
+  data: T;
+  timestamp: number;
+};
+
+class MobileCacheManager {
+  private cache = new Map<string, MobileCacheEntry<unknown>>();
+  private inFlight = new Map<string, Promise<unknown>>();
+
+  get<T>(key: string, maxAgeMs: number = 20_000): T | null {
+    const entry = this.cache.get(key) as MobileCacheEntry<T> | undefined;
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > maxAgeMs) {
+      this.cache.delete(key);
+      return null;
     }
-    throw new Error(
-      body.error ||
-        "Votre période d'essai de 14 jours a pris fin. Veuillez régulariser votre abonnement via Orange Money."
-    );
+    return entry.data;
   }
-  if (!res.ok || !body.success) {
-    throw new Error(body.error || `Erreur serveur (${res.status})`);
+
+  set<T>(key: string, data: T) {
+    this.cache.set(key, { data, timestamp: Date.now() });
   }
-  return body.data;
+
+  invalidate(prefix?: string) {
+    if (!prefix) {
+      this.cache.clear();
+      return;
+    }
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  dedupe<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const existing = this.inFlight.get(key) as Promise<T> | undefined;
+    if (existing) return existing;
+    const promise = fetcher().finally(() => {
+      this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+}
+
+export const mobileCache = new MobileCacheManager();
+
+async function call<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { cacheTtlMs?: number; bypassCache?: boolean }
+): Promise<T> {
+  if (!currentSession) throw new Error("Non connecté");
+
+  const isGet = !init?.method || init.method.toUpperCase() === "GET";
+  const ttl = options?.cacheTtlMs ?? (isGet ? 15_000 : 0);
+
+  if (isGet && !options?.bypassCache && ttl > 0) {
+    const cached = mobileCache.get<T>(path, ttl);
+    if (cached !== null) return cached;
+  }
+
+  const exec = async () => {
+    const base = currentSession!.serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${base}/api/luumo/v1${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Cookie: `session_id=${currentSession!.sessionId}`,
+        ...init?.headers,
+      },
+    });
+    const body = (await res.json()) as Envelope<T>;
+    if (res.status === 402) {
+      if (onTrialExpiredHandler) {
+        onTrialExpiredHandler();
+      }
+      throw new Error(
+        body.error ||
+          "Votre période d'essai de 14 jours a pris fin. Veuillez régulariser votre abonnement via Orange Money."
+      );
+    }
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || `Erreur serveur (${res.status})`);
+    }
+
+    if (isGet && ttl > 0) {
+      mobileCache.set(path, body.data);
+    } else {
+      // Invalidation sur mutations
+      if (path.startsWith("/orders")) {
+        mobileCache.invalidate("/orders");
+        mobileCache.invalidate("/products");
+        mobileCache.invalidate("/customers");
+        mobileCache.invalidate("/dashboard");
+      } else if (path.startsWith("/products")) {
+        mobileCache.invalidate("/products");
+        mobileCache.invalidate("/dashboard");
+      } else if (path.startsWith("/customers")) {
+        mobileCache.invalidate("/customers");
+        mobileCache.invalidate("/dashboard");
+      }
+    }
+
+    return body.data;
+  };
+
+  if (isGet) {
+    return mobileCache.dedupe(path, exec);
+  }
+  return exec();
 }
 
 export const mobileApi = {
@@ -236,5 +323,9 @@ export const mobileApi = {
       method: "POST",
       body: JSON.stringify(input),
     });
+  },
+
+  invalidateCache(prefix?: string) {
+    mobileCache.invalidate(prefix);
   },
 };

@@ -1,0 +1,9 @@
+{
+  "name": "@luumo/core-types",
+  "version": "2.0.0",
+  "description": "Single Source of Truth TypeScript interfaces for Luumo ERP (Web & Mobile)",
+  "main": "index.ts",
+  "types": "index.ts",
+  "author": "Luumo Engineering Team",
+  "license": "MIT"
+}

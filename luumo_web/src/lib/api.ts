@@ -110,9 +110,93 @@ async function request<T>(path: string, init?: RequestInit): Promise<Envelope<T>
   return body;
 }
 
-const get = <T>(path: string) => request<T>(path);
-const post = <T>(path: string, data: unknown) =>
-  request<T>(path, { method: "POST", body: JSON.stringify(data) });
+type CacheEntry<T> = {
+  data: Envelope<T>;
+  timestamp: number;
+};
+
+class ClientCacheManager {
+  private cache = new Map<string, CacheEntry<unknown>>();
+  private inFlight = new Map<string, Promise<unknown>>();
+
+  get<T>(key: string, maxAgeMs: number = 20_000): Envelope<T> | null {
+    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > maxAgeMs) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  set<T>(key: string, data: Envelope<T>) {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  invalidate(prefix?: string) {
+    if (!prefix) {
+      this.cache.clear();
+      return;
+    }
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  dedupe<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const existing = this.inFlight.get(key) as Promise<T> | undefined;
+    if (existing) return existing;
+    const promise = fetcher().finally(() => {
+      this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+}
+
+export const clientCache = new ClientCacheManager();
+
+async function get<T>(
+  path: string,
+  options?: { cacheTtlMs?: number; bypassCache?: boolean }
+): Promise<Envelope<T>> {
+  const ttl = options?.cacheTtlMs ?? 15_000;
+  if (!options?.bypassCache && ttl > 0) {
+    const cached = clientCache.get<T>(path, ttl);
+    if (cached) return cached;
+  }
+  return clientCache.dedupe(path, async () => {
+    const res = await request<T>(path);
+    if (ttl > 0 && res.success) {
+      clientCache.set(path, res);
+    }
+    return res;
+  });
+}
+
+async function post<T>(path: string, data: unknown): Promise<Envelope<T>> {
+  if (path.startsWith("/orders")) {
+    clientCache.invalidate("/orders");
+    clientCache.invalidate("/products");
+    clientCache.invalidate("/customers");
+    clientCache.invalidate("/dashboard");
+  } else if (path.startsWith("/products")) {
+    clientCache.invalidate("/products");
+    clientCache.invalidate("/dashboard");
+  } else if (path.startsWith("/customers")) {
+    clientCache.invalidate("/customers");
+    clientCache.invalidate("/dashboard");
+  } else if (path.startsWith("/fleet")) {
+    clientCache.invalidate("/fleet");
+  } else if (path.startsWith("/hr")) {
+    clientCache.invalidate("/hr");
+  } else if (path.startsWith("/company")) {
+    clientCache.invalidate("/company");
+  }
+  return request<T>(path, { method: "POST", body: JSON.stringify(data) });
+}
 
 const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
   const sp = new URLSearchParams();
@@ -412,5 +496,9 @@ export const api = {
 
   imageUrl(path: string | null) {
     return path && !isDemo() ? `/odoo${path}` : null;
+  },
+
+  invalidateCache(prefix?: string) {
+    clientCache.invalidate(prefix);
   },
 };
