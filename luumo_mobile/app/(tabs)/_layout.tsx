@@ -29,6 +29,11 @@ export default function TabsLayout() {
                 <Text style={styles.demoPillText}>DÉMO</Text>
               </View>
             )}
+            {session?.user?.is_admin && (
+              <View style={styles.adminPill}>
+                <Text style={styles.adminPillText}>👑 ADMIN</Text>
+              </View>
+            )}
             <Pressable
               hitSlop={12}
               onPress={() => {
@@ -108,6 +113,17 @@ const styles = StyleSheet.create({
   },
   demoPillText: {
     color: colors.ink,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  adminPill: {
+    backgroundColor: "#F3BC33",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  adminPillText: {
+    color: "#071913",
     fontSize: 10,
     fontWeight: "800",
   },

@@ -9,4 +9,5 @@ from . import purchases_controller
 from . import hr_controller
 from . import fleet_controller
 from . import payments_controller
+from . import admin_controller
 from . import main

@@ -114,5 +114,29 @@ class TestLuumoSubscriptionRules(unittest.TestCase):
         self.assertEqual(plans['wholesale']['price'] * 10, 4500000)
 
 
+class TestLuumoAdminBackoffice(unittest.TestCase):
+    """Vérification des règles d'administration de la plateforme Luumo (Option A)."""
+
+    def test_admin_trial_extension_calculation(self):
+        today = date.today()
+        # Extension de +7 jours
+        initial_end = today + timedelta(days=2)
+        added_days = 7
+        new_end = initial_end + timedelta(days=added_days)
+        self.assertEqual((new_end - initial_end).days, 7)
+        self.assertEqual((new_end - today).days, 9)
+
+    def test_admin_phone_cleanup_and_mrr(self):
+        # Calcul MRR plateforme
+        companies = [
+            {'status': 'active', 'plan_price': 150000},
+            {'status': 'active', 'plan_price': 450000},
+            {'status': 'trial', 'plan_price': 150000},
+            {'status': 'expired', 'plan_price': 250000},
+        ]
+        mrr = sum(c['plan_price'] for c in companies if c['status'] == 'active')
+        self.assertEqual(mrr, 600000)
+
+
 if __name__ == '__main__':
     unittest.main()

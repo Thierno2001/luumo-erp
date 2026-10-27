@@ -51,6 +51,7 @@ export type User = {
   id: number;
   name: string;
   login: string;
+  is_admin?: boolean;
   company: {
     id: number;
     name: string;
@@ -58,6 +59,46 @@ export type User = {
     enabled_apps?: string[];
     subscription?: CompanySubscriptionInfo;
   };
+};
+
+export type AdminKpis = {
+  total_companies: number;
+  active_subscribers: number;
+  trial_subscribers: number;
+  expired_subscribers: number;
+  mrr: number;
+  gmv: number;
+};
+
+export type AdminCompanyItem = {
+  id: number;
+  name: string;
+  city: string;
+  phone: string;
+  email: string;
+  admin_name: string;
+  plan: CompanyPlan;
+  status: "active" | "trial" | "past_due" | "expired";
+  days_remaining: number;
+  current_period_end: string;
+  create_date: string;
+};
+
+export type AdminPaymentItem = {
+  id: number;
+  tx_ref: string;
+  company_name: string;
+  provider: "orange_money" | "mtn_momo" | "paycard" | string;
+  merchant_code: string;
+  amount: number;
+  customer_phone?: string;
+  state: "pending" | "paid" | "failed" | "expired";
+  created_at: string;
+};
+
+export type AdminOverviewResponse = {
+  kpis: AdminKpis;
+  currency: Currency;
 };
 
 export type Product = {

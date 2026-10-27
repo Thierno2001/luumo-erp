@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useMobileSession } from "@/context/session";
 import { mobileApi } from "@/lib/api";
 import { formatCompact, formatGNF } from "@/lib/format";
 import { Badge, PrimaryButton, TricolorBar } from "@/components/ui";
@@ -14,6 +15,7 @@ import { colors, radii } from "@/theme";
 import type { Dashboard } from "@/lib/types";
 
 export default function HomeScreen() {
+  const { session } = useMobileSession();
   const [data, setData] = useState<Dashboard | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -43,6 +45,16 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={load} />
         }
       >
+        {/* Super-Admin Platform Indicator */}
+        {session?.user?.is_admin && (
+          <View style={styles.adminBanner}>
+            <Text style={styles.adminBannerTitle}>👑 Supervision Super-Admin Plateforme</Text>
+            <Text style={styles.adminBannerSub}>
+              Pilotage centralisé actif. Utilisez le Backoffice Web (/admin) pour valider les flux Orange Money et prolonger les essais.
+            </Text>
+          </View>
+        )}
+
         {/* Hero Card Ventes du jour */}
         <View style={styles.heroCard}>
           <Text style={styles.heroLabel}>VENTES DU JOUR</Text>
@@ -183,6 +195,24 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   kpiSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  adminBanner: {
+    backgroundColor: "#071913",
+    borderRadius: radii.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(243, 188, 51, 0.4)",
+  },
+  adminBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#F3BC33",
+    marginBottom: 4,
+  },
+  adminBannerSub: {
+    fontSize: 11,
+    color: "#A7F3D0",
+    lineHeight: 16,
+  },
   card: {
     backgroundColor: colors.card,
     borderRadius: radii.md,

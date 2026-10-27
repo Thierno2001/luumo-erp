@@ -11,6 +11,9 @@ import {
   validateVatNifOwasp,
 } from "./security";
 import type {
+  AdminCompanyItem,
+  AdminOverviewResponse,
+  AdminPaymentItem,
   BusinessPlanId,
   CompanyAppsResponse,
   CompanySubscriptionInfo,
@@ -492,6 +495,48 @@ export const api = {
   async upgradeCompanyPlan(plan_id: BusinessPlanId): Promise<CompanyAppsResponse> {
     if (isDemo()) return demo.upgradeCompanyPlan(plan_id);
     return (await post<CompanyAppsResponse>("/company/plan/upgrade", { plan_id })).data;
+  },
+
+  async getAdminOverview(): Promise<AdminOverviewResponse> {
+    return (await get<AdminOverviewResponse>("/admin/overview", { bypassCache: true })).data;
+  },
+
+  async getAdminCompanies(): Promise<AdminCompanyItem[]> {
+    return (await get<AdminCompanyItem[]>("/admin/companies", { bypassCache: true })).data;
+  },
+
+  async extendTrial(companyId: number, days = 7): Promise<CompanySubscriptionInfo> {
+    return (
+      await post<CompanySubscriptionInfo>(`/admin/companies/${companyId}/extend-trial`, { days })
+    ).data;
+  },
+
+  async activateCompany(
+    companyId: number,
+    options?: { provider?: string; phone?: string; months?: number }
+  ): Promise<CompanySubscriptionInfo> {
+    return (
+      await post<CompanySubscriptionInfo>(`/admin/companies/${companyId}/activate`, options || {})
+    ).data;
+  },
+
+  async changeCompanyPlan(
+    companyId: number,
+    planId: BusinessPlanId
+  ): Promise<CompanySubscriptionInfo> {
+    return (
+      await post<CompanySubscriptionInfo>(`/admin/companies/${companyId}/change-plan`, {
+        plan_id: planId,
+      })
+    ).data;
+  },
+
+  async getAdminPayments(): Promise<AdminPaymentItem[]> {
+    return (await get<AdminPaymentItem[]>("/admin/payments", { bypassCache: true })).data;
+  },
+
+  async forceConfirmPayment(paymentId: number): Promise<unknown> {
+    return (await post<unknown>(`/admin/payments/${paymentId}/force-confirm`, {})).data;
   },
 
   imageUrl(path: string | null) {

@@ -84,12 +84,14 @@ class LuumoAuthController(LuumoBaseController):
         plan = get_company_plan(request.env, user.company_id)
         enabled_apps = get_company_enabled_apps(request.env, user.company_id)
         subscription = get_company_subscription_info(request.env, user.company_id)
+        is_admin = user.id == 1 or user.id == SUPERUSER_ID or user.has_group('base.group_system')
         return self._ok({
             'session_id': request.session.sid,
             'user': {
                 'id': user.id,
                 'name': user.name,
                 'login': user.login,
+                'is_admin': is_admin,
                 'company': {
                     'id': user.company_id.id,
                     'name': user.company_id.name,
@@ -216,6 +218,7 @@ class LuumoAuthController(LuumoBaseController):
                     'id': new_user.id,
                     'name': new_user.name,
                     'login': new_user.login,
+                    'is_admin': False,
                     'company': {
                         'id': company.id,
                         'name': company.name,
@@ -241,11 +244,13 @@ class LuumoAuthController(LuumoBaseController):
             plan = get_company_plan(request.env, user.company_id)
             enabled_apps = get_company_enabled_apps(request.env, user.company_id)
             subscription = get_company_subscription_info(request.env, user.company_id)
+            is_admin = user.id == 1 or user.id == SUPERUSER_ID or user.has_group('base.group_system')
             return self._ok({
                 'user': {
                     'id': user.id,
                     'name': user.name,
                     'login': user.login,
+                    'is_admin': is_admin,
                     'company': {
                         'id': user.company_id.id,
                         'name': user.company_id.name,

@@ -19,10 +19,13 @@ export const colors = {
   muted: "#EEF3F1",
   text: "#0B2920",
   textMuted: "#526B63",
+  inkMuted: "#526B63",
 } as const;
 
 export const radii = {
   sm: 8,
   md: 14,
   lg: 20,
+  xl: 24,
+  full: 9999,
 } as const;

@@ -283,6 +283,7 @@ export const mobileApi = {
         status: "active",
         current_period_end: "2026-11-30",
         days_remaining: 30,
+        invoices: [],
         plans: {
           retail: {
             id: "retail",

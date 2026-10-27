@@ -76,6 +76,16 @@ export default function HomeAppSwitcherPage() {
             </span>
           )}
 
+          {session.user.is_admin && (
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#071913] text-[#F3BC33] font-semibold text-xs border border-[#F3BC33]/40 hover:border-[#F3BC33] shadow-xs transition-all"
+              title="Accéder au Backoffice Super-Admin Plateforme"
+            >
+              <span>👑 Backoffice Admin</span>
+            </Link>
+          )}
+
           {session.user.company.subscription?.status === "trial" && (
             <span className="text-[#0B6E4F] font-semibold bg-[#E8F5EE] px-2.5 py-0.5 rounded-full border border-[#C6E6D5] text-[11px]">
               Essai : {session.user.company.subscription.days_remaining}j restants
