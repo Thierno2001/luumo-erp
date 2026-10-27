@@ -59,7 +59,7 @@ class LuumoHrController(LuumoBaseController):
                     'employees_count': len(serialized_emps),
                 },
             }, currency=self._currency())
-        return self._guard(_do)
+        return self._guard(_do, app_id='hr')
 
     @luumo_route('/hr/employees/create', ['POST'])
     def create_employee(self):
@@ -98,7 +98,7 @@ class LuumoHrController(LuumoBaseController):
 
             employee = env['hr.employee'].sudo().create(vals)
             return self._ok(serialize_employee(employee), status=201)
-        return self._guard(_do)
+        return self._guard(_do, app_id='hr')
 
     @luumo_route('/hr/expenses/create', ['POST'])
     def create_expense(self):
@@ -151,4 +151,4 @@ class LuumoHrController(LuumoBaseController):
                 'payment_mode': 'company_account' if from_cash else 'own_account',
             })
             return self._ok(serialize_expense(expense), status=201)
-        return self._guard(_do)
+        return self._guard(_do, app_id='hr')

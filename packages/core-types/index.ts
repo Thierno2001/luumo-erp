@@ -47,11 +47,29 @@ export type CompanySubscriptionInfo = {
 
 export type CompanyAppsResponse = CompanySubscriptionInfo;
 
+export type LuumoRole =
+  | "platform_admin"
+  | "manager"
+  | "cashier"
+  | "stock_keeper"
+  | "accountant";
+
+export type RoleDefinition = {
+  id: LuumoRole;
+  name: string;
+  description: string;
+  allowed_apps: string[];
+  is_platform_admin: boolean;
+};
+
 export type User = {
   id: number;
   name: string;
   login: string;
   is_admin?: boolean;
+  role?: LuumoRole;
+  role_name?: string;
+  allowed_apps?: string[];
   company: {
     id: number;
     name: string;
@@ -59,6 +77,20 @@ export type User = {
     enabled_apps?: string[];
     subscription?: CompanySubscriptionInfo;
   };
+};
+
+export type AdminUserItem = {
+  id: number;
+  name: string;
+  login: string;
+  phone?: string;
+  active: boolean;
+  role: LuumoRole;
+  role_name: string;
+  allowed_apps: string[];
+  company_id: number;
+  company_name: string;
+  create_date: string;
 };
 
 export type AdminKpis = {

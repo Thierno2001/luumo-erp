@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { BrandAccentBar, LUUMO_APPS, LuumoLogo } from "@/components/ui";
 import { AppTotemIcon } from "@/components/app-totem-icon";
@@ -21,7 +22,14 @@ const APP_TAGLINES: Record<string, string> = {
 
 export default function HomeAppSwitcherPage() {
   const { session, logout, ready } = useSession();
+  const router = useRouter();
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (ready && session?.user?.is_admin) {
+      router.replace("/admin");
+    }
+  }, [ready, session, router]);
 
   if (!ready) {
     return (
@@ -36,8 +44,18 @@ export default function HomeAppSwitcherPage() {
     return <LuumoLandingPage />;
   }
 
+  // Le Super-Admin est réorienté vers son Backoffice exclusif
+  if (session.user.is_admin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#071913]">
+        <div className="w-8 h-8 rounded-full border-3 border-[#F3BC33] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  const userRoleApps = session.user?.allowed_apps;
   const currentPlan = session.user?.company?.plan;
-  const allowedApps = currentPlan?.allowed_apps ?? LUUMO_APPS.map((a) => a.id);
+  const allowedApps = userRoleApps ?? currentPlan?.allowed_apps ?? LUUMO_APPS.map((a) => a.id);
   const activeApps = LUUMO_APPS.filter((app) => allowedApps.includes(app.id));
 
   const filteredApps = activeApps.filter(

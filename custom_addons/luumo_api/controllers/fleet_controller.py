@@ -25,7 +25,7 @@ class LuumoFleetController(LuumoBaseController):
                 ('company_id', '=', env.company.id)
             ], limit=100, order='license_plate, id desc')
             return self._ok([serialize_vehicle(v) for v in vehicles])
-        return self._guard(_do)
+        return self._guard(_do, app_id='fleet')
 
     @luumo_route('/fleet/vehicles/create', ['POST'])
     def create_vehicle(self):
@@ -102,7 +102,7 @@ class LuumoFleetController(LuumoBaseController):
                 })
 
             return self._ok(serialize_vehicle(vehicle), status=201)
-        return self._guard(_do)
+        return self._guard(_do, app_id='fleet')
 
     @luumo_route('/fleet/vehicles/<int:vehicle_id>/toggle-status', ['POST'])
     def toggle_vehicle_status(self, vehicle_id):
@@ -131,7 +131,7 @@ class LuumoFleetController(LuumoBaseController):
 
             vehicle.write({'state_id': new_state.id})
             return self._ok(serialize_vehicle(vehicle))
-        return self._guard(_do)
+        return self._guard(_do, app_id='fleet')
 
     @luumo_route('/fleet/vehicles/<int:vehicle_id>/repair', ['POST'])
     def record_repair(self, vehicle_id):
@@ -236,4 +236,4 @@ class LuumoFleetController(LuumoBaseController):
                 'vehicle': serialize_vehicle(vehicle),
                 'service_id': service.id,
             })
-        return self._guard(_do)
+        return self._guard(_do, app_id='fleet')

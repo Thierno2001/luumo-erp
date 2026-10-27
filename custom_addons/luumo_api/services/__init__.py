@@ -4,3 +4,4 @@ from . import apps_service
 from . import http_core
 from . import security_owasp
 from . import serializers
+from . import roles_service

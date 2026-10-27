@@ -111,10 +111,18 @@ class LuumoBaseController(http.Controller):
         except (TypeError, ValueError):
             return default
 
-    def _guard(self, func, *args, check_subscription=True, **kwargs):
-        """Exécute `func` dans un bloc sécurisé avec vérification de session et d'abonnement."""
+    def _guard(self, func, *args, check_subscription=True, app_id=None, **kwargs):
+        """Exécute `func` dans un bloc sécurisé avec vérification de session, abonnement et privilèges de rôle."""
         if not self._is_authenticated():
             return self._error('Session expirée ou non authentifiée', 401)
+        if app_id:
+            from .roles_service import can_user_access_app
+            if not can_user_access_app(request.env, request.env.user, app_id):
+                return self._error(
+                    f"Accès refusé : votre profil utilisateur n'a pas les privilèges pour l'application « {app_id} ».",
+                    403,
+                    code='PERMISSION_DENIED',
+                )
         if check_subscription and not self._is_subscription_active():
             return self._error(
                 "Votre période d'essai de 14 jours a pris fin. Veuillez régulariser votre abonnement via Orange Money pour continuer à utiliser Luumo.",

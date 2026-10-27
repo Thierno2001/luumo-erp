@@ -26,6 +26,10 @@ import {
   Lock,
   Unlock,
   Check,
+  UserPlus,
+  KeyRound,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
@@ -35,30 +39,37 @@ import type {
   AdminCompanyItem,
   AdminKpis,
   AdminPaymentItem,
+  AdminUserItem,
   BusinessPlanId,
+  LuumoRole,
+  RoleDefinition,
 } from "@/lib/types";
 
 export default function AdminBackofficePage() {
   const { session, logout, ready } = useSession();
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<"companies" | "payments" | "plans">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "payments" | "plans" | "users">("companies");
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
   const [companies, setCompanies] = useState<AdminCompanyItem[]>([]);
   const [payments, setPayments] = useState<AdminPaymentItem[]>([]);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filtres
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "trial" | "active" | "expired">("all");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<"all" | LuumoRole>("all");
 
   // Notifications
   const [toastMsg, setToastMsg] = useState<{ text: string; tone: "success" | "danger" } | null>(
     null
   );
 
-  // Modals
+  // Modals Sociétés
   const [selectedCompany, setSelectedCompany] = useState<AdminCompanyItem | null>(null);
   const [actionType, setActionType] = useState<"extend" | "activate" | "plan" | null>(null);
   const [extendDays, setExtendDays] = useState(7);
@@ -68,6 +79,18 @@ export default function AdminBackofficePage() {
   const [newPlanId, setNewPlanId] = useState<BusinessPlanId>("retail");
   const [submittingAction, setSubmittingAction] = useState(false);
 
+  // Modals Utilisateurs
+  const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
+  const [userModalType, setUserModalType] = useState<"create" | "role" | "password" | null>(null);
+  const [createUserName, setCreateUserName] = useState("");
+  const [createUserLogin, setCreateUserLogin] = useState("");
+  const [createUserPhone, setCreateUserPhone] = useState("");
+  const [createUserPassword, setCreateUserPassword] = useState("");
+  const [createUserCompanyId, setCreateUserCompanyId] = useState<number>(1);
+  const [createUserRole, setCreateUserRole] = useState<LuumoRole>("cashier");
+  const [updateRole, setUpdateRole] = useState<LuumoRole>("cashier");
+  const [resetPasswordVal, setResetPasswordVal] = useState("");
+
   const showToast = (text: string, tone: "success" | "danger" = "success") => {
     setToastMsg({ text, tone });
     setTimeout(() => setToastMsg(null), 5000);
@@ -76,15 +99,22 @@ export default function AdminBackofficePage() {
   const loadData = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [ovRes, compRes, payRes] = await Promise.all([
+      const [ovRes, compRes, payRes, usersRes, rolesRes] = await Promise.all([
         api.getAdminOverview().catch(() => null),
         api.getAdminCompanies().catch(() => []),
         api.getAdminPayments().catch(() => []),
+        api.getAdminUsers().catch(() => []),
+        api.getAdminRoles().catch(() => []),
       ]);
 
       if (ovRes) setKpis(ovRes.kpis);
       setCompanies(compRes);
       setPayments(payRes);
+      setUsers(usersRes);
+      setRoles(rolesRes);
+      if (compRes.length > 0) {
+        setCreateUserCompanyId((prev) => prev || compRes[0].id);
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Erreur lors du chargement des données", "danger");
     } finally {
@@ -215,6 +245,97 @@ export default function AdminBackofficePage() {
       await loadData();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Échec du changement de forfait", "danger");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Filtrage des utilisateurs
+  const filteredUsers = users.filter((u) => {
+    const matchQuery =
+      u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.login.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.company_name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      (u.phone && u.phone.includes(userSearchQuery));
+
+    if (!matchQuery) return false;
+    if (userRoleFilter === "all") return true;
+    return u.role === userRoleFilter;
+  });
+
+  // Action : Créer un utilisateur
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingAction(true);
+    try {
+      await api.createAdminUser({
+        name: createUserName,
+        login: createUserLogin,
+        phone: createUserPhone,
+        password: createUserPassword,
+        company_id: createUserCompanyId,
+        role: createUserRole,
+      });
+      showToast(`Utilisateur "${createUserName}" créé avec succès !`);
+      setUserModalType(null);
+      setCreateUserName("");
+      setCreateUserLogin("");
+      setCreateUserPhone("");
+      setCreateUserPassword("");
+      await loadData();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Échec de création de l'utilisateur", "danger");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Action : Mettre à jour le rôle / profil
+  const handleUpdateUserRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setSubmittingAction(true);
+    try {
+      await api.updateAdminUserRole(selectedUser.id, updateRole);
+      showToast(`Profil mis à jour pour ${selectedUser.name} !`);
+      setSelectedUser(null);
+      setUserModalType(null);
+      await loadData();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Échec de mise à jour du rôle", "danger");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Action : Activer / Désactiver un utilisateur
+  const handleToggleUserActive = async (u: AdminUserItem) => {
+    try {
+      const res = await api.toggleAdminUserActive(u.id);
+      showToast(
+        res.active
+          ? `Compte de ${u.name} réactivé.`
+          : `Compte de ${u.name} suspendu.`
+      );
+      await loadData();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Échec de modification du statut", "danger");
+    }
+  };
+
+  // Action : Réinitialiser le mot de passe
+  const handleResetUserPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setSubmittingAction(true);
+    try {
+      await api.resetAdminUserPassword(selectedUser.id, resetPasswordVal);
+      showToast(`Mot de passe réinitialisé pour ${selectedUser.name} !`);
+      setSelectedUser(null);
+      setUserModalType(null);
+      setResetPasswordVal("");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Échec de réinitialisation du mot de passe", "danger");
     } finally {
       setSubmittingAction(false);
     }
@@ -391,6 +512,18 @@ export default function AdminBackofficePage() {
           >
             <Layers className="w-4 h-4 text-[#F3BC33]" />
             <span>Grille des Forfaits</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === "users"
+                ? "bg-[#0B6E4F] text-white shadow-sm"
+                : "text-[#8FAEA1] hover:text-white hover:bg-[#0B231B]"
+            }`}
+          >
+            <Users className="w-4 h-4 text-[#34D399]" />
+            <span>Utilisateurs &amp; Privilèges ({users.length})</span>
           </button>
         </div>
 
@@ -699,6 +832,207 @@ export default function AdminBackofficePage() {
             </div>
           </div>
         )}
+
+        {/* TAB 4 : Utilisateurs & Privilèges */}
+        {activeTab === "users" && (
+          <div className="space-y-4">
+            {/* Barre d'outils Utilisateurs */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0B231B] p-3 rounded-2xl border border-[#18392D]">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#708F83]" />
+                <input
+                  type="text"
+                  placeholder="Rechercher utilisateur, email, commerce..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Filtre par Profil */}
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Tous les profils</option>
+                  <option value="platform_admin">👑 Super-Admin Plateforme</option>
+                  <option value="manager">🏢 Gérants / Propriétaires</option>
+                  <option value="cashier">🛒 Caissiers / Vendeurs</option>
+                  <option value="stock_keeper">📦 Magasiniers</option>
+                  <option value="accountant">📊 Comptables</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserModalType("create");
+                    setCreateUserName("");
+                    setCreateUserLogin("");
+                    setCreateUserPhone("");
+                    setCreateUserPassword("");
+                    setCreateUserRole("cashier");
+                    if (companies.length > 0) setCreateUserCompanyId(companies[0].id);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#0B6E4F] hover:bg-[#0E8A63] text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Nouvel Utilisateur</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Table des Utilisateurs & Droits */}
+            <div className="overflow-x-auto rounded-2xl border border-[#18392D] bg-[#0B231B]">
+              <table className="w-full text-left text-xs text-[#D1E2DB]">
+                <thead className="bg-[#071913] text-[#708F83] font-semibold border-b border-[#18392D]">
+                  <tr>
+                    <th className="py-3 px-4">Utilisateur</th>
+                    <th className="py-3 px-4">Commerce / Établissement</th>
+                    <th className="py-3 px-4">Profil &amp; Privilèges</th>
+                    <th className="py-3 px-4">Applications Autorisées</th>
+                    <th className="py-3 px-4">Statut</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#18392D]">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-[#708F83]">
+                        Aucun utilisateur trouvé.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const isAdm = u.role === "platform_admin";
+                      const roleBadgeColor = isAdm
+                        ? "bg-[#FEF6DF] text-[#8F5E00] border-[#F3BC33]"
+                        : u.role === "manager"
+                        ? "bg-[#E8F2EE] text-[#115040] border-[#115040]/30"
+                        : u.role === "cashier"
+                        ? "bg-blue-950/60 text-blue-300 border-blue-700/40"
+                        : u.role === "stock_keeper"
+                        ? "bg-purple-950/60 text-purple-300 border-purple-700/40"
+                        : "bg-amber-950/60 text-amber-300 border-amber-700/40";
+
+                      return (
+                        <tr key={u.id} className="hover:bg-[#0E2C22] transition">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-white flex items-center gap-2">
+                              <span>{u.name}</span>
+                              {isAdm && <span title="Super-Admin">👑</span>}
+                            </div>
+                            <div className="text-[11px] text-[#708F83]">{u.login}</div>
+                            {u.phone && (
+                              <div className="text-[10px] text-[#526B63] flex items-center gap-1 mt-0.5">
+                                <Phone className="w-2.5 h-2.5" />
+                                <span>{u.phone}</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-white font-medium">{u.company_name}</div>
+                            <div className="text-[10px] text-[#708F83]">ID #{u.company_id}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${roleBadgeColor}`}
+                            >
+                              {u.role_name}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {isAdm ? (
+                              <span className="text-[11px] text-[#F3BC33] font-semibold">
+                                Tour de contrôle globale (/admin)
+                              </span>
+                            ) : u.allowed_apps.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {u.allowed_apps.map((app) => (
+                                  <span
+                                    key={app}
+                                    className="px-2 py-0.5 rounded bg-[#071913] text-[#7EE7B8] text-[10px] font-medium border border-[#1E4D3B]"
+                                  >
+                                    {app}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-[#708F83]">Aucune</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {u.active ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#11382A] text-[#34D399] border border-[#1E523F]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+                                Actif
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3E1116] text-[#FFA1A8] border border-[#7A232D]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#FFA1A8]" />
+                                Suspendu
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              {/* Changer le rôle */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setUpdateRole(u.role);
+                                  setUserModalType("role");
+                                }}
+                                title="Modifier le profil et privilèges"
+                                className="px-2 py-1 rounded-lg bg-[#071913] hover:bg-[#11382A] text-[#D1E2DB] hover:text-[#34D399] border border-[#18392D] text-[11px] font-semibold transition"
+                              >
+                                Profil
+                              </button>
+
+                              {/* Réinitialiser mot de passe */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setResetPasswordVal("");
+                                  setUserModalType("password");
+                                }}
+                                title="Réinitialiser le mot de passe"
+                                className="p-1 rounded-lg bg-[#071913] hover:bg-[#11382A] text-[#D1E2DB] hover:text-[#F3BC33] border border-[#18392D] transition"
+                              >
+                                <KeyRound className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Activer / Désactiver */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleUserActive(u)}
+                                title={u.active ? "Suspendre ce compte" : "Réactiver ce compte"}
+                                className={`p-1 rounded-lg border transition ${
+                                  u.active
+                                    ? "bg-[#071913] text-[#708F83] hover:text-[#FFA1A8] hover:border-[#7A232D]"
+                                    : "bg-[#071913] text-[#34D399] hover:bg-[#11382A] border-[#1E523F]"
+                                }`}
+                              >
+                                {u.active ? (
+                                  <UserX className="w-3.5 h-3.5" />
+                                ) : (
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* MODAL 1 : Prolonger Essai (+7j / +14j) */}
@@ -918,6 +1252,255 @@ export default function AdminBackofficePage() {
                   className="px-4 py-2 rounded-xl bg-[#0B6E4F] text-white text-xs font-bold"
                 >
                   {submittingAction ? "Enregistrement..." : "Appliquer le forfait"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4 : Créer un utilisateur */}
+      {userModalType === "create" && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B231B] border border-[#18392D] rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-[#34D399]" />
+              <span>Créer un nouvel utilisateur</span>
+            </h3>
+
+            <form onSubmit={handleCreateUser} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Nom complet :
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Oumar Camara"
+                  value={createUserName}
+                  onChange={(e) => setCreateUserName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Email / Identifiant de connexion :
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="oumar@entreprise.gn"
+                  value={createUserLogin}
+                  onChange={(e) => setCreateUserLogin(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Téléphone (+224) :
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+224 620 00 00 00"
+                  value={createUserPhone}
+                  onChange={(e) => setCreateUserPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Commerce / Établissement rattaché :
+                </label>
+                <select
+                  value={createUserCompanyId}
+                  onChange={(e) => setCreateUserCompanyId(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white focus:outline-none cursor-pointer"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Profil &amp; Privilèges :
+                </label>
+                <select
+                  value={createUserRole}
+                  onChange={(e) => setCreateUserRole(e.target.value as LuumoRole)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="cashier">Caissier / Vendeur (Caisse &amp; Clients)</option>
+                  <option value="stock_keeper">Magasinier (Inventaire &amp; Achats)</option>
+                  <option value="accountant">Comptable (Factures, Dettes, Salaires)</option>
+                  <option value="manager">Gérant / Propriétaire (Accès complet)</option>
+                  <option value="platform_admin">Super-Admin Plateforme (Tour de contrôle)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Mot de passe temporaire (12+ caractères) :
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Min. 12 car., Maj, Min, Chiffre, Symbole"
+                  value={createUserPassword}
+                  onChange={(e) => setCreateUserPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setUserModalType(null)}
+                  className="px-4 py-2 rounded-xl border border-[#18392D] text-xs text-[#8FAEA1]"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAction}
+                  className="px-4 py-2 rounded-xl bg-[#0B6E4F] text-white text-xs font-bold"
+                >
+                  {submittingAction ? "Création..." : "Créer l'utilisateur"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5 : Changer de rôle / profil */}
+      {userModalType === "role" && selectedUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B231B] border border-[#18392D] rounded-2xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-base font-bold text-white">Changer le profil &amp; privilèges</h3>
+            <p className="text-xs text-[#8FAEA1]">
+              Utilisateur : <strong className="text-white">{selectedUser.name}</strong> ({selectedUser.login})
+            </p>
+
+            <form onSubmit={handleUpdateUserRole} className="space-y-3">
+              <div className="space-y-2">
+                {[
+                  {
+                    id: "cashier",
+                    name: "Caissier / Vendeur",
+                    desc: "Restreint à la caisse /pos et clients.",
+                  },
+                  {
+                    id: "stock_keeper",
+                    name: "Magasinier",
+                    desc: "Restreint à l'inventaire /products et achats.",
+                  },
+                  {
+                    id: "accountant",
+                    name: "Comptable",
+                    desc: "Accès factures, dettes, RH et bilan.",
+                  },
+                  {
+                    id: "manager",
+                    name: "Gérant / Propriétaire",
+                    desc: "Accès complet aux applications de la boutique.",
+                  },
+                  {
+                    id: "platform_admin",
+                    name: "Super-Admin Plateforme",
+                    desc: "Accès exclusif au Backoffice Plateforme (/admin).",
+                  },
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setUpdateRole(r.id as LuumoRole)}
+                    className={`w-full p-2.5 rounded-xl text-left border transition ${
+                      updateRole === r.id
+                        ? "bg-[#0B6E4F] border-[#34D399] text-white"
+                        : "border-[#1E4D3B] text-[#708F83] hover:text-white"
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{r.name}</div>
+                    <div className="text-[10px] text-[#A7F3D0]/80">{r.desc}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setUserModalType(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-[#18392D] text-xs text-[#8FAEA1]"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAction}
+                  className="px-4 py-2 rounded-xl bg-[#0B6E4F] text-white text-xs font-bold"
+                >
+                  {submittingAction ? "Mise à jour..." : "Enregistrer le profil"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6 : Réinitialiser mot de passe */}
+      {userModalType === "password" && selectedUser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B231B] border border-[#18392D] rounded-2xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-[#F3BC33]" />
+              <span>Réinitialiser le mot de passe</span>
+            </h3>
+            <p className="text-xs text-[#8FAEA1]">
+              Utilisateur : <strong className="text-white">{selectedUser.name}</strong> ({selectedUser.login})
+            </p>
+
+            <form onSubmit={handleResetUserPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                  Nouveau mot de passe (min. 12 car.) :
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Min. 12 car., Maj, Min, Chiffre, Symbole"
+                  value={resetPasswordVal}
+                  onChange={(e) => setResetPasswordVal(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#071913] border border-[#1E4D3B] text-xs text-white placeholder-[#526B63] focus:outline-none focus:border-[#34D399]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setUserModalType(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-[#18392D] text-xs text-[#8FAEA1]"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAction}
+                  className="px-4 py-2 rounded-xl bg-[#0B6E4F] text-white text-xs font-bold"
+                >
+                  {submittingAction ? "Réinitialisation..." : "Valider le nouveau mot de passe"}
                 </button>
               </div>
             </form>

@@ -27,7 +27,18 @@ from ..services.apps_service import (
     upgrade_company_plan,
 )
 from ..services.http_core import LuumoBaseController, luumo_route
-from ..services.security_owasp import clean_text
+from ..services.roles_service import (
+    LUUMO_ROLES,
+    get_user_allowed_apps,
+    get_user_role,
+    set_user_role,
+)
+from ..services.security_owasp import (
+    clean_text,
+    validate_email,
+    validate_password_owasp,
+    validate_phone,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -269,5 +280,193 @@ class LuumoAdminController(LuumoBaseController):
             })
             su_env.cr.commit()
             return self._ok(tx.to_api_dict())
+
+        return self._guard(_do, check_subscription=False)
+
+    @luumo_route('/admin/roles', ['GET'])
+    def admin_roles(self):
+        """Retourne le référentiel des profils métier et de leurs privilèges."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+        return self._ok(list(LUUMO_ROLES.values()))
+
+    @luumo_route('/admin/users', ['GET'])
+    def admin_users(self):
+        """Liste tous les utilisateurs de la plateforme avec leur profil et entreprise."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+
+        def _do():
+            su_env = request.env(user=SUPERUSER_ID)
+            users = su_env['res.users'].search([('id', '!=', 1), ('login', 'not in', ['__system__', 'public', 'default', 'portaltemplate'])], order='id desc')
+            res = []
+            for u in users:
+                role_id = get_user_role(su_env, u)
+                role_info = LUUMO_ROLES.get(role_id, LUUMO_ROLES['manager'])
+                user_apps = get_user_allowed_apps(su_env, u)
+
+                res.append({
+                    'id': u.id,
+                    'name': u.name,
+                    'login': u.login,
+                    'phone': u.partner_id.phone or '',
+                    'active': u.active,
+                    'role': role_id,
+                    'role_name': role_info['name'],
+                    'allowed_apps': user_apps,
+                    'company_id': u.company_id.id,
+                    'company_name': u.company_id.name,
+                    'create_date': fields.Datetime.to_string(u.create_date),
+                })
+            return self._ok(res)
+
+        return self._guard(_do, check_subscription=False)
+
+    @luumo_route('/admin/users/create', ['POST'])
+    def admin_create_user(self):
+        """Crée un nouvel utilisateur pour une entreprise avec un rôle spécifique."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+
+        def _do():
+            su_env = request.env(user=SUPERUSER_ID)
+            p = self._payload()
+
+            name = clean_text(p.get('name'), 'Nom complet', min_len=2, max_len=100, required=True)
+            login = validate_email(p.get('login'), required=True)
+            password = p.get('password') or ''
+            validate_password_owasp(password, login=login, name=name)
+
+            company_id = int(p.get('company_id') or 0)
+            comp = su_env['res.company'].browse(company_id)
+            if not comp.exists():
+                return self._error("Entreprise introuvable.", 404)
+
+            existing = su_env['res.users'].search([('login', '=', login)], limit=1)
+            if existing:
+                return self._error("Cet identifiant / email est déjà utilisé.", 400)
+
+            role = p.get('role') or 'cashier'
+            if role not in LUUMO_ROLES:
+                return self._error("Profil / Rôle invalide.", 400)
+
+            user_vals = {
+                'name': name,
+                'login': login,
+                'password': password,
+                'company_id': comp.id,
+                'company_ids': [(6, 0, [comp.id])],
+                'email': login,
+            }
+            if p.get('phone'):
+                user_vals['phone'] = validate_phone(p.get('phone'))
+
+            # Groupe de base utilisateur interne
+            internal_grp = su_env.ref('base.group_user', raise_if_not_found=False)
+            if internal_grp:
+                user_vals['groups_id'] = [(4, internal_grp.id)]
+
+            new_u = su_env['res.users'].create(user_vals)
+            set_user_role(su_env, new_u, role)
+            su_env.cr.commit()
+
+            role_info = LUUMO_ROLES.get(role, LUUMO_ROLES['cashier'])
+            return self._ok({
+                'id': new_u.id,
+                'name': new_u.name,
+                'login': new_u.login,
+                'phone': new_u.partner_id.phone or '',
+                'active': new_u.active,
+                'role': role,
+                'role_name': role_info['name'],
+                'allowed_apps': get_user_allowed_apps(su_env, new_u),
+                'company_id': comp.id,
+                'company_name': comp.name,
+                'create_date': fields.Datetime.to_string(new_u.create_date),
+            }, status=201)
+
+        return self._guard(_do, check_subscription=False)
+
+    @luumo_route('/admin/users/<int:uid>/role', ['POST'])
+    def admin_update_user_role(self, uid):
+        """Met à jour le profil métier / privilège d'un utilisateur."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+
+        def _do():
+            su_env = request.env(user=SUPERUSER_ID)
+            user = su_env['res.users'].browse(uid)
+            if not user.exists():
+                return self._error("Utilisateur introuvable.", 404)
+
+            p = self._payload()
+            role = p.get('role')
+            if role not in LUUMO_ROLES:
+                return self._error("Rôle invalide.", 400)
+
+            set_user_role(su_env, user, role)
+            su_env.cr.commit()
+
+            role_info = LUUMO_ROLES[role]
+            return self._ok({
+                'id': user.id,
+                'role': role,
+                'role_name': role_info['name'],
+                'allowed_apps': get_user_allowed_apps(su_env, user),
+            })
+
+        return self._guard(_do, check_subscription=False)
+
+    @luumo_route('/admin/users/<int:uid>/toggle-active', ['POST'])
+    def admin_toggle_user_active(self, uid):
+        """Active ou désactive (suspend) le compte d'un utilisateur."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+
+        def _do():
+            su_env = request.env(user=SUPERUSER_ID)
+            if uid == request.env.user.id:
+                return self._error("Vous ne pouvez pas désactiver votre propre compte administrateur.", 400)
+            if uid == 1:
+                return self._error("Le compte système racine ne peut pas être désactivé.", 400)
+
+            user = su_env['res.users'].browse(uid)
+            if not user.exists():
+                return self._error("Utilisateur introuvable.", 404)
+
+            new_active = not user.active
+            user.write({'active': new_active})
+            su_env.cr.commit()
+
+            return self._ok({'id': user.id, 'active': new_active})
+
+        return self._guard(_do, check_subscription=False)
+
+    @luumo_route('/admin/users/<int:uid>/reset-password', ['POST'])
+    def admin_reset_user_password(self, uid):
+        """Réinitialise le mot de passe d'un utilisateur."""
+        access_err = self._check_admin_access()
+        if access_err:
+            return access_err
+
+        def _do():
+            su_env = request.env(user=SUPERUSER_ID)
+            user = su_env['res.users'].browse(uid)
+            if not user.exists():
+                return self._error("Utilisateur introuvable.", 404)
+
+            p = self._payload()
+            password = p.get('password') or ''
+            validate_password_owasp(password, login=user.login, name=user.name)
+
+            user.write({'password': password})
+            su_env.cr.commit()
+
+            return self._ok({'id': user.id, 'password_reset': True})
 
         return self._guard(_do, check_subscription=False)

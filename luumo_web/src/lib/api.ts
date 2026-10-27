@@ -14,6 +14,7 @@ import type {
   AdminCompanyItem,
   AdminOverviewResponse,
   AdminPaymentItem,
+  AdminUserItem,
   BusinessPlanId,
   CompanyAppsResponse,
   CompanySubscriptionInfo,
@@ -30,6 +31,7 @@ import type {
   Expense,
   GuineaQrProvider,
   HrOverview,
+  LuumoRole,
   Order,
   Paged,
   PaymentIntent,
@@ -39,6 +41,7 @@ import type {
   RecordRepairInput,
   RecordRepairResponse,
   RegisterCompanyInput,
+  RoleDefinition,
   User,
   Vehicle,
 } from "./types";
@@ -537,6 +540,52 @@ export const api = {
 
   async forceConfirmPayment(paymentId: number): Promise<unknown> {
     return (await post<unknown>(`/admin/payments/${paymentId}/force-confirm`, {})).data;
+  },
+
+  async getAdminUsers(): Promise<AdminUserItem[]> {
+    return (await get<AdminUserItem[]>("/admin/users", { bypassCache: true })).data;
+  },
+
+  async getAdminRoles(): Promise<RoleDefinition[]> {
+    return (await get<RoleDefinition[]>("/admin/roles", { bypassCache: true })).data;
+  },
+
+  async createAdminUser(input: {
+    name: string;
+    login: string;
+    password: string;
+    company_id: number;
+    role?: LuumoRole;
+    phone?: string;
+  }): Promise<AdminUserItem> {
+    return (await post<AdminUserItem>("/admin/users/create", input)).data;
+  },
+
+  async updateAdminUserRole(
+    userId: number,
+    role: LuumoRole
+  ): Promise<{ id: number; role: LuumoRole; role_name: string; allowed_apps: string[] }> {
+    return (
+      await post<{ id: number; role: LuumoRole; role_name: string; allowed_apps: string[] }>(
+        `/admin/users/${userId}/role`,
+        { role }
+      )
+    ).data;
+  },
+
+  async toggleAdminUserActive(userId: number): Promise<{ id: number; active: boolean }> {
+    return (
+      await post<{ id: number; active: boolean }>(`/admin/users/${userId}/toggle-active`, {})
+    ).data;
+  },
+
+  async resetAdminUserPassword(userId: number, password: string): Promise<{ id: number; password_reset: boolean }> {
+    return (
+      await post<{ id: number; password_reset: boolean }>(
+        `/admin/users/${userId}/reset-password`,
+        { password }
+      )
+    ).data;
   },
 
   imageUrl(path: string | null) {

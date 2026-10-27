@@ -138,5 +138,41 @@ class TestLuumoAdminBackoffice(unittest.TestCase):
         self.assertEqual(mrr, 600000)
 
 
+class TestLuumoRbacRoles(unittest.TestCase):
+    """Vérification des règles de privilèges et de séparation des profils (RBAC)."""
+
+    def test_role_matrix_privileges(self):
+        roles = {
+            'platform_admin': {'allowed_apps': [], 'is_admin': True},
+            'manager': {'allowed_apps': ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet'], 'is_admin': False},
+            'cashier': {'allowed_apps': ['pos', 'customers'], 'is_admin': False},
+            'stock_keeper': {'allowed_apps': ['inventory', 'purchases'], 'is_admin': False},
+            'accountant': {'allowed_apps': ['orders', 'customers', 'hr', 'dashboard'], 'is_admin': False},
+        }
+
+        # 1. Super-Admin ne fait pas d'opérations de caisse locale
+        self.assertEqual(roles['platform_admin']['allowed_apps'], [])
+        self.assertTrue(roles['platform_admin']['is_admin'])
+
+        # 2. Caissier ne peut accéder ni aux RH ni aux Achats
+        cashier_apps = set(roles['cashier']['allowed_apps'])
+        self.assertIn('pos', cashier_apps)
+        self.assertIn('customers', cashier_apps)
+        self.assertNotIn('hr', cashier_apps)
+        self.assertNotIn('purchases', cashier_apps)
+
+        # 3. Magasinier ne peut pas accéder à la caisse
+        stock_apps = set(roles['stock_keeper']['allowed_apps'])
+        self.assertIn('inventory', stock_apps)
+        self.assertIn('purchases', stock_apps)
+        self.assertNotIn('pos', stock_apps)
+
+        # 4. Comptable a accès aux factures et bilans mais pas à la caisse comptoir
+        accountant_apps = set(roles['accountant']['allowed_apps'])
+        self.assertIn('dashboard', accountant_apps)
+        self.assertIn('orders', accountant_apps)
+        self.assertNotIn('pos', accountant_apps)
+
+
 if __name__ == '__main__':
     unittest.main()

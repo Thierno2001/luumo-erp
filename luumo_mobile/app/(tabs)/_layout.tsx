@@ -16,6 +16,16 @@ export default function TabsLayout() {
   const { session, logout } = useMobileSession();
   const router = useRouter();
 
+  const userRole = session?.user?.role ?? (session?.user?.is_admin ? "platform_admin" : "manager");
+  const isPlatformAdmin = Boolean(session?.user?.is_admin || userRole === "platform_admin");
+
+  // Privilèges de profil (RBAC mobile)
+  const canAccessPos = !isPlatformAdmin && (userRole === "manager" || userRole === "cashier");
+  const canAccessCustomers =
+    !isPlatformAdmin &&
+    (userRole === "manager" || userRole === "cashier" || userRole === "accountant");
+  const canAccessStock = !isPlatformAdmin && (userRole === "manager" || userRole === "stock_keeper");
+
   return (
     <Tabs
       screenOptions={{
@@ -32,6 +42,11 @@ export default function TabsLayout() {
             {session?.user?.is_admin && (
               <View style={styles.adminPill}>
                 <Text style={styles.adminPillText}>👑 ADMIN</Text>
+              </View>
+            )}
+            {session?.user?.role_name && !session?.user?.is_admin && (
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>{session.user.role_name.toUpperCase()}</Text>
               </View>
             )}
             <Pressable
@@ -71,6 +86,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="pos"
         options={{
+          href: canAccessPos ? "/(tabs)/pos" : null,
           title: "Caisse",
           headerTitle: "Caisse Comptoir (GNF)",
           tabBarIcon: ({ color, size }) => (
@@ -81,6 +97,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="customers"
         options={{
+          href: canAccessCustomers ? "/(tabs)/customers" : null,
           title: "Carnet Dettes",
           headerTitle: "Clients & Carnet de Dettes",
           tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
@@ -89,6 +106,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="stock"
         options={{
+          href: canAccessStock ? "/(tabs)/stock" : null,
           title: "Stock",
           headerTitle: "Inventaire & Articles",
           tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
@@ -125,6 +143,19 @@ const styles = StyleSheet.create({
   adminPillText: {
     color: "#071913",
     fontSize: 10,
+    fontWeight: "800",
+  },
+  rolePill: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  rolePillText: {
+    color: "#FFFFFF",
+    fontSize: 9,
     fontWeight: "800",
   },
   logoutBtn: {

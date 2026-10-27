@@ -20,6 +20,10 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  const userRole = session?.user?.role ?? (session?.user?.is_admin ? "platform_admin" : "manager");
+  const isPlatformAdmin = Boolean(session?.user?.is_admin || userRole === "platform_admin");
+  const canAccessPos = !isPlatformAdmin && (userRole === "manager" || userRole === "cashier");
+
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -45,33 +49,43 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={load} />
         }
       >
-        {/* Super-Admin Platform Indicator */}
-        {session?.user?.is_admin && (
-          <View style={styles.adminBanner}>
-            <Text style={styles.adminBannerTitle}>👑 Supervision Super-Admin Plateforme</Text>
-            <Text style={styles.adminBannerSub}>
-              Pilotage centralisé actif. Utilisez le Backoffice Web (/admin) pour valider les flux Orange Money et prolonger les essais.
+        {isPlatformAdmin ? (
+          <View style={styles.adminHeroCard}>
+            <View style={styles.adminHeroBadge}>
+              <Text style={styles.adminHeroBadgeText}>👑 SUPER-ADMIN PLATEFORME</Text>
+            </View>
+            <Text style={styles.adminHeroTitle}>Tour de Contrôle SaaS</Text>
+            <Text style={styles.adminHeroDesc}>
+              Votre compte administrateur racine supervise l&apos;ensemble des commerces et abonnements Luumo en Guinée. La gestion des abonnements, validation Orange Money et attribution des rôles se fait sur le Backoffice Web.
             </Text>
+            <View style={styles.adminNoticeBox}>
+              <Text style={styles.adminNoticeText}>
+                Accédez au portail complet sur votre navigateur :
+              </Text>
+              <Text style={styles.adminNoticeUrl}>http://localhost:3000/admin</Text>
+            </View>
+          </View>
+        ) : (
+          /* Hero Card Ventes du jour pour les commerçants */
+          <View style={styles.heroCard}>
+            <Text style={styles.heroLabel}>VENTES DU JOUR</Text>
+            <Text style={styles.heroAmount}>
+              {data ? formatGNF(data.kpis.sales_today) : "—"}
+            </Text>
+            <Text style={styles.heroSub}>
+              {data?.kpis.orders_today ?? 0} vente(s) confirmée(s) • Mois :{" "}
+              {data ? formatGNF(data.kpis.sales_month) : "—"}
+            </Text>
+            {canAccessPos && (
+              <PrimaryButton
+                tone="gold"
+                label="+ Nouvelle vente au comptoir"
+                onPress={() => router.push("/(tabs)/pos")}
+                style={{ marginTop: 14 }}
+              />
+            )}
           </View>
         )}
-
-        {/* Hero Card Ventes du jour */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>VENTES DU JOUR</Text>
-          <Text style={styles.heroAmount}>
-            {data ? formatGNF(data.kpis.sales_today) : "—"}
-          </Text>
-          <Text style={styles.heroSub}>
-            {data?.kpis.orders_today ?? 0} vente(s) confirmée(s) • Mois :{" "}
-            {data ? formatGNF(data.kpis.sales_month) : "—"}
-          </Text>
-          <PrimaryButton
-            tone="gold"
-            label="+ Nouvelle vente au comptoir"
-            onPress={() => router.push("/(tabs)/pos")}
-            style={{ marginTop: 14 }}
-          />
-        </View>
 
         {/* 2 KPI Cards */}
         <View style={styles.kpiRow}>
@@ -212,6 +226,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#A7F3D0",
     lineHeight: 16,
+  },
+  adminHeroCard: {
+    backgroundColor: "#071913",
+    borderRadius: radii.lg,
+    padding: 20,
+    borderWidth: 1.5,
+    borderColor: "rgba(243, 188, 51, 0.5)",
+    gap: 8,
+  },
+  adminHeroBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F3BC33",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  adminHeroBadgeText: {
+    color: "#071913",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  adminHeroTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 4,
+  },
+  adminHeroDesc: {
+    fontSize: 12,
+    color: "#D1E2DB",
+    lineHeight: 18,
+  },
+  adminNoticeBox: {
+    backgroundColor: "#0B231B",
+    borderRadius: radii.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#1E4D3B",
+    marginTop: 6,
+    gap: 4,
+  },
+  adminNoticeText: {
+    fontSize: 11,
+    color: "#8FAEA1",
+  },
+  adminNoticeUrl: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#F3BC33",
+    fontFamily: "monospace",
   },
   card: {
     backgroundColor: colors.card,

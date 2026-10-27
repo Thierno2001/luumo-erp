@@ -63,14 +63,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (!session && !isPublicPage) {
       router.replace("/login");
     } else if (session && (pathname?.startsWith("/login") || pathname?.startsWith("/register"))) {
-      router.replace("/");
+      if (session.user.is_admin) {
+        router.replace("/admin");
+      } else {
+        router.replace("/");
+      }
     }
   }, [ready, session, pathname, router]);
 
   const login = async (userLogin: string, password: string) => {
     const s = await api.login(userLogin, password);
     setSession(s);
-    router.replace("/");
+    if (s.user.is_admin) {
+      router.replace("/admin");
+    } else {
+      router.replace("/");
+    }
   };
 
   const registerCompany = async (input: RegisterCompanyInput) => {

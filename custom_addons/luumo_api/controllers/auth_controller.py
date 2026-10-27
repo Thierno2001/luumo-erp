@@ -20,6 +20,11 @@ from ..services.apps_service import (
     set_company_enabled_apps,
     upgrade_company_plan,
 )
+from ..services.roles_service import (
+    LUUMO_ROLES,
+    get_user_role,
+    get_user_allowed_apps,
+)
 from ..services.http_core import LuumoBaseController, luumo_route
 from ..services.security_owasp import (
     check_rate_limit,
@@ -85,6 +90,10 @@ class LuumoAuthController(LuumoBaseController):
         enabled_apps = get_company_enabled_apps(request.env, user.company_id)
         subscription = get_company_subscription_info(request.env, user.company_id)
         is_admin = user.id == 1 or user.id == SUPERUSER_ID or user.has_group('base.group_system')
+        role_id = get_user_role(request.env, user)
+        role_info = LUUMO_ROLES.get(role_id, LUUMO_ROLES['manager'])
+        user_allowed_apps = get_user_allowed_apps(request.env, user)
+
         return self._ok({
             'session_id': request.session.sid,
             'user': {
@@ -92,6 +101,9 @@ class LuumoAuthController(LuumoBaseController):
                 'name': user.name,
                 'login': user.login,
                 'is_admin': is_admin,
+                'role': role_id,
+                'role_name': role_info['name'],
+                'allowed_apps': user_allowed_apps,
                 'company': {
                     'id': user.company_id.id,
                     'name': user.company_id.name,
@@ -219,6 +231,9 @@ class LuumoAuthController(LuumoBaseController):
                     'name': new_user.name,
                     'login': new_user.login,
                     'is_admin': False,
+                    'role': 'manager',
+                    'role_name': LUUMO_ROLES['manager']['name'],
+                    'allowed_apps': enabled_apps,
                     'company': {
                         'id': company.id,
                         'name': company.name,
@@ -245,12 +260,19 @@ class LuumoAuthController(LuumoBaseController):
             enabled_apps = get_company_enabled_apps(request.env, user.company_id)
             subscription = get_company_subscription_info(request.env, user.company_id)
             is_admin = user.id == 1 or user.id == SUPERUSER_ID or user.has_group('base.group_system')
+            role_id = get_user_role(request.env, user)
+            role_info = LUUMO_ROLES.get(role_id, LUUMO_ROLES['manager'])
+            user_allowed_apps = get_user_allowed_apps(request.env, user)
+
             return self._ok({
                 'user': {
                     'id': user.id,
                     'name': user.name,
                     'login': user.login,
                     'is_admin': is_admin,
+                    'role': role_id,
+                    'role_name': role_info['name'],
+                    'allowed_apps': user_allowed_apps,
                     'company': {
                         'id': user.company_id.id,
                         'name': user.company_id.name,

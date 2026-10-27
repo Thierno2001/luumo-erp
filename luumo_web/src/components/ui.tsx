@@ -26,6 +26,8 @@ import {
   WifiOff,
   SlidersHorizontal,
   CreditCard,
+  ShieldAlert,
+  Lock,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { useOfflineSync } from "@/lib/offline-sync";
@@ -556,7 +558,60 @@ export function AppShell({
     );
   }
 
+  // 1. Protection Super-Admin : se concentre exclusivement sur le Backoffice Plateforme
+  if (session.user.is_admin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#071913] p-4">
+        <div className="max-w-md w-full bg-[#0B231B] border border-[#F3BC33]/40 rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-[#F3BC33]/20 text-[#F3BC33] flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h2 className="font-heading text-lg font-bold text-white">Espace Super-Admin Plateforme</h2>
+          <p className="text-xs text-[#8FAEA1] leading-relaxed">
+            Votre compte est dédié à la gestion globale du SaaS Luumo (MRR, supervision multi-commerces, validation Mobile Money). Les applications de caisse et stock sont réservées aux commerçants.
+          </p>
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F3BC33] text-[#071913] font-bold text-xs hover:bg-[#E5A812] transition shadow-md"
+          >
+            Accéder au Backoffice Plateforme →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const activeApp = getActiveApp(pathname);
+
+  // 2. Vérification des Privilèges de Rôle (RBAC) pour les utilisateurs de boutique
+  const userAllowedApps = session.user.allowed_apps;
+  if (
+    userAllowedApps &&
+    userAllowedApps.length > 0 &&
+    activeApp.id !== "apps" &&
+    !userAllowedApps.includes(activeApp.id)
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F9F8] p-4">
+        <div className="max-w-md w-full bg-white border border-[#DCE5E1] rounded-2xl p-6 text-center space-y-4 shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-[#FFEDD5] text-[#C2410C] flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="font-heading text-lg font-bold text-[#0B2920]">Privilège insuffisant</h2>
+          <p className="text-xs text-[#526B63] leading-relaxed">
+            Votre profil « {session.user.role_name || session.user.role || "Utilisateur"} » n&apos;a pas les privilèges requis pour accéder à l&apos;application « {activeApp.name} ».
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#115040] text-white font-bold text-xs hover:bg-[#0B382C] transition shadow-md"
+          >
+            Retour aux applications autorisées →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const ActiveAppIcon = activeApp.icon;
 
   return (
