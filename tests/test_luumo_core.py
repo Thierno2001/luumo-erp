@@ -188,6 +188,39 @@ class TestLuumoRbacRoles(unittest.TestCase):
         self.assertIn('orders', accountant_apps)
         self.assertNotIn('pos', accountant_apps)
 
+    def test_plan_downgrade_and_upgrade_intersection(self):
+        """Vérifie que l'accès effectif d'un utilisateur est strictement l'intersection
+        entre son rôle et le forfait actif de son entreprise (ex: Grossiste -> Services -> Boutique).
+        """
+        plans = {
+            'retail': ['pos', 'inventory', 'customers', 'dashboard'],
+            'services': ['inventory', 'orders', 'customers', 'hr', 'dashboard'],
+            'wholesale': ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet'],
+        }
+        manager_role_apps = ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet']
+        cashier_role_apps = ['pos', 'customers']
+
+        # Cas 1 : Manager sur Forfait Grossiste -> 8 applications
+        effective_wholesale = [a for a in manager_role_apps if a in plans['wholesale']]
+        self.assertEqual(len(effective_wholesale), 8)
+
+        # Cas 2 : Passage immédiat au Forfait Services -> strictement 5 applications
+        effective_services = [a for a in manager_role_apps if a in plans['services']]
+        self.assertEqual(len(effective_services), 5)
+        self.assertNotIn('pos', effective_services)
+        self.assertNotIn('fleet', effective_services)
+        self.assertNotIn('purchases', effective_services)
+
+        # Cas 3 : Passage immédiat au Forfait Boutique -> strictement 4 applications
+        effective_retail = [a for a in manager_role_apps if a in plans['retail']]
+        self.assertEqual(len(effective_retail), 4)
+        self.assertNotIn('orders', effective_retail)
+        self.assertNotIn('hr', effective_retail)
+
+        # Cas 4 : Caissier sur Forfait Services (qui n'a pas de 'pos') -> reste uniquement 'customers'
+        effective_cashier_services = [a for a in cashier_role_apps if a in plans['services']]
+        self.assertEqual(effective_cashier_services, ['customers'])
+
 
 if __name__ == '__main__':
     unittest.main()

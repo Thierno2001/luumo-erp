@@ -53,9 +53,14 @@ export default function HomeAppSwitcherPage() {
     );
   }
 
-  const userRoleApps = session.user?.allowed_apps;
   const currentPlan = session.user?.company?.plan;
-  const allowedApps = userRoleApps ?? currentPlan?.allowed_apps ?? LUUMO_APPS.map((a) => a.id);
+  const planApps = currentPlan?.allowed_apps ?? LUUMO_APPS.map((a) => a.id);
+  const userRoleApps = session.user?.allowed_apps;
+  // L'accès effectif aux applications est strictement l'intersection entre le forfait et les privilèges du rôle
+  const allowedApps =
+    userRoleApps && userRoleApps.length > 0
+      ? userRoleApps.filter((app) => planApps.includes(app))
+      : planApps;
   const activeApps = LUUMO_APPS.filter((app) => allowedApps.includes(app.id));
 
   const filteredApps = activeApps.filter(

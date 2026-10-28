@@ -583,30 +583,51 @@ export function AppShell({
 
   const activeApp = getActiveApp(pathname);
 
-  // 2. Vérification des Privilèges de Rôle (RBAC) pour les utilisateurs de boutique
-  const userAllowedApps = session.user.allowed_apps;
+  // 2. Vérification des Privilèges de Rôle (RBAC) et du Forfait Souscrit
+  const currentPlan = session.user?.company?.plan;
+  const planApps = currentPlan?.allowed_apps;
+  const userAllowedApps = session.user?.allowed_apps;
+  const effectiveAllowedApps =
+    userAllowedApps && userAllowedApps.length > 0
+      ? (planApps ? userAllowedApps.filter((a) => planApps.includes(a)) : userAllowedApps)
+      : (planApps ?? []);
+
   if (
-    userAllowedApps &&
-    userAllowedApps.length > 0 &&
     activeApp.id !== "apps" &&
-    !userAllowedApps.includes(activeApp.id)
+    effectiveAllowedApps.length > 0 &&
+    !effectiveAllowedApps.includes(activeApp.id)
   ) {
+    const isPlanRestriction = planApps && !planApps.includes(activeApp.id);
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F9F8] p-4">
         <div className="max-w-md w-full bg-white border border-[#DCE5E1] rounded-2xl p-6 text-center space-y-4 shadow-sm">
           <div className="w-12 h-12 rounded-full bg-[#FFEDD5] text-[#C2410C] flex items-center justify-center mx-auto">
             <Lock className="w-6 h-6" />
           </div>
-          <h2 className="font-heading text-lg font-bold text-[#0B2920]">Privilège insuffisant</h2>
+          <h2 className="font-heading text-lg font-bold text-[#0B2920]">
+            {isPlanRestriction ? "Application non incluse" : "Privilège insuffisant"}
+          </h2>
           <p className="text-xs text-[#526B63] leading-relaxed">
-            Votre profil « {session.user.role_name || session.user.role || "Utilisateur"} » n&apos;a pas les privilèges requis pour accéder à l&apos;application « {activeApp.name} ».
+            {isPlanRestriction
+              ? `L'application « ${activeApp.name} » n'est pas comprise dans votre forfait actuel « ${currentPlan?.name ?? "Souscrit"} ».`
+              : `Votre profil « ${session.user.role_name || session.user.role || "Utilisateur"} » n'a pas les privilèges requis pour accéder à l'application « ${activeApp.name} ».`}
           </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#115040] text-white font-bold text-xs hover:bg-[#0B382C] transition shadow-md"
-          >
-            Retour aux applications autorisées →
-          </Link>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-[#0B2920] font-semibold text-xs hover:bg-slate-50 transition"
+            >
+              Retour à l&apos;accueil
+            </Link>
+            {isPlanRestriction && (
+              <Link
+                href="/apps"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#115040] text-white font-bold text-xs hover:bg-[#0B382C] transition shadow-md"
+              >
+                Changer de forfait →
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );

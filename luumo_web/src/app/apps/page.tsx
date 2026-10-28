@@ -6,6 +6,7 @@ import {
   AppShell,
   Modal,
 } from "@/components/ui";
+import { useSession } from "@/context/session";
 import { api } from "@/lib/api";
 import { formatGNF } from "@/lib/format";
 import type {
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 
 export default function SubscriptionBillingPage() {
+  const { upgradePlan } = useSession();
   const [subInfo, setSubInfo] = useState<CompanySubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
@@ -98,12 +100,17 @@ export default function SubscriptionBillingPage() {
     setUpgrading(true);
     setSuccessMsg(null);
     try {
-      const updated = await api.upgradeCompanyPlan(upgradeTarget.id);
+      await upgradePlan(upgradeTarget.id);
+      const updated = await api.getCompanySubscription();
       setSubInfo(updated);
-      setUpgradeTarget(null);
+      const isDowngrade =
+        upgradeTarget.allowed_apps.length < (currentPlan?.allowed_apps.length ?? 8);
       setSuccessMsg(
-        `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Vos nouvelles applications sont débloquées.`
+        isDowngrade
+          ? `Forfait modifié vers « ${upgradeTarget.name} ». Vos accès applicatifs sont mis à jour instantanément (vos données restent intactes).`
+          : `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Vos nouvelles applications sont débloquées instantanément.`
       );
+      setUpgradeTarget(null);
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch {
       // Ignoré

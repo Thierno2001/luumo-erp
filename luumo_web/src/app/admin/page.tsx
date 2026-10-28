@@ -239,6 +239,11 @@ export default function AdminBackofficePage() {
     setSubmittingAction(true);
     try {
       await api.changeCompanyPlan(selectedCompany.id, newPlanId);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("luumo:plan_changed", { detail: { planId: newPlanId } })
+        );
+      }
       showToast(`Forfait mis à jour vers "${newPlanId}" pour ${selectedCompany.name} !`);
       setSelectedCompany(null);
       setActionType(null);

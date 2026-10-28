@@ -897,6 +897,7 @@ export const demo = {
     const plan = DEMO_PLANS[plan_id] ?? DEMO_PLANS.wholesale;
     DEMO_USER.company.plan = plan;
     DEMO_USER.company.enabled_apps = [...plan.allowed_apps];
+    DEMO_USER.allowed_apps = [...plan.allowed_apps];
     return delay({
       current_plan: plan,
       allowed_apps: plan.allowed_apps,
@@ -907,6 +908,19 @@ export const demo = {
       plans: DEMO_PLANS,
       invoices: [...demoSubscriptionInvoices],
     });
+  },
+
+  async changeCompanyPlan(
+    companyId: number,
+    planId: BusinessPlanId
+  ): Promise<CompanySubscriptionInfo> {
+    const plan = DEMO_PLANS[planId] ?? DEMO_PLANS.wholesale;
+    if (DEMO_USER.company.id === companyId) {
+      DEMO_USER.company.plan = plan;
+      DEMO_USER.company.enabled_apps = [...plan.allowed_apps];
+      DEMO_USER.allowed_apps = [...plan.allowed_apps];
+    }
+    return this.upgradeCompanyPlan(planId);
   },
 };
 

@@ -5,6 +5,7 @@
  */
 import { demo, DEMO_CURRENCY, DEMO_USER } from "./demo";
 import type {
+  BusinessPlanId,
   CompanySubscriptionInfo,
   CreateOrderInput,
   Currency,
@@ -323,6 +324,23 @@ export const mobileApi = {
     return call<CompanySubscriptionInfo>("/company/subscription/pay", {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  async me(): Promise<{ user: User; currency: Currency }> {
+    if (currentSession?.mode === "demo") {
+      return { user: DEMO_USER, currency: DEMO_CURRENCY };
+    }
+    return call<{ user: User; currency: Currency }>("/auth/me");
+  },
+
+  async upgradePlan(planId: BusinessPlanId): Promise<CompanySubscriptionInfo> {
+    if (currentSession?.mode === "demo") {
+      return this.getSubscription();
+    }
+    return call<CompanySubscriptionInfo>("/company/plan/upgrade", {
+      method: "POST",
+      body: JSON.stringify({ plan_id: planId }),
     });
   },
 

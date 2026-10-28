@@ -18,6 +18,7 @@ type SessionContextValue = {
   upgradePlan: (planId: BusinessPlanId) => Promise<void>;
   paySubscription: (input: { provider: string; phone: string; months?: number }) => Promise<void>;
   refreshSubscription: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -39,10 +40,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const onTrialExpiredEvent = () => {
       setForceTrialExpired(true);
     };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "luumo_session") {
+        const fresh = readSession();
+        setSession(fresh);
+      }
+    };
+    const onPlanChanged = () => {
+      const fresh = readSession();
+      if (fresh) setSession(fresh);
+    };
+
     if (typeof window !== "undefined") {
       window.addEventListener("luumo:trial_expired", onTrialExpiredEvent);
+      window.addEventListener("storage", onStorage);
+      window.addEventListener("luumo:plan_changed", onPlanChanged);
       return () => {
         window.removeEventListener("luumo:trial_expired", onTrialExpiredEvent);
+        window.removeEventListener("storage", onStorage);
+        window.removeEventListener("luumo:plan_changed", onPlanChanged);
       };
     }
   }, []);
@@ -118,22 +134,115 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshSession = async () => {
+    if (!session) return;
+    if (session.mode === "live") {
+      try {
+        const fresh = await api.me();
+        if (fresh?.user) {
+          const updated: Session = {
+            ...session,
+            user: fresh.user,
+            currency: fresh.currency ?? session.currency,
+          };
+          writeSession(updated);
+          setSession(updated);
+          if (
+            fresh.user.company.subscription?.status === "active" ||
+            (fresh.user.company.subscription?.status === "trial" &&
+              fresh.user.company.subscription.days_remaining > 0)
+          ) {
+            setForceTrialExpired(false);
+          }
+        }
+      } catch {
+        // Silencieux
+      }
+    } else if (session.mode === "demo") {
+      const demoPlan = session.user.company.plan;
+      if (demoPlan) {
+        const updated: Session = {
+          ...session,
+          user: {
+            ...session.user,
+            allowed_apps: [...demoPlan.allowed_apps],
+            company: {
+              ...session.user.company,
+              plan: demoPlan,
+              enabled_apps: [...demoPlan.allowed_apps],
+            },
+          },
+        };
+        writeSession(updated);
+        setSession(updated);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!ready || !session) return;
+    const onFocus = () => {
+      refreshSession();
+    };
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshSession();
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      const timer = setInterval(refreshSession, 30000);
+      return () => {
+        window.removeEventListener("focus", onFocus);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        clearInterval(timer);
+      };
+    }
+  }, [ready, session?.user?.id, session?.mode]);
+
   const upgradePlan = async (planId: BusinessPlanId) => {
     const res = await api.upgradeCompanyPlan(planId);
     if (session) {
+      const newPlan = res.current_plan;
+      const updatedAllowedApps = newPlan.allowed_apps;
+
       const updated: Session = {
         ...session,
         user: {
           ...session.user,
+          allowed_apps: updatedAllowedApps,
           company: {
             ...session.user.company,
-            plan: res.current_plan,
+            plan: newPlan,
             enabled_apps: res.enabled_apps,
+            subscription: res,
           },
         },
       };
       writeSession(updated);
       setSession(updated);
+
+      if (session.mode === "live") {
+        try {
+          const fresh = await api.me();
+          if (fresh?.user) {
+            const finalSession: Session = {
+              ...session,
+              user: fresh.user,
+              currency: fresh.currency ?? session.currency,
+            };
+            writeSession(finalSession);
+            setSession(finalSession);
+          }
+        } catch {
+          // Silencieux
+        }
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("luumo:plan_changed", { detail: { planId } }));
+      }
     }
   };
 
@@ -159,33 +268,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshSubscription = async () => {
-    if (session?.mode === "live") {
-      try {
-        const subInfo = await api.getCompanySubscription();
-        if (
-          subInfo.status === "active" ||
-          (subInfo.status === "trial" && subInfo.days_remaining > 0)
-        ) {
-          setForceTrialExpired(false);
-        }
-        const updated: Session = {
-          ...session,
-          user: {
-            ...session.user,
-            company: {
-              ...session.user.company,
-              plan: subInfo.current_plan,
-              enabled_apps: subInfo.enabled_apps,
-              subscription: subInfo,
-            },
-          },
-        };
-        writeSession(updated);
-        setSession(updated);
-      } catch {
-        // Silencieux
-      }
-    }
+    await refreshSession();
   };
 
   return (
@@ -203,6 +286,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         upgradePlan,
         paySubscription,
         refreshSubscription,
+        refreshSession,
       }}
     >
       {children}

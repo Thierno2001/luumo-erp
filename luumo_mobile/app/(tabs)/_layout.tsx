@@ -19,12 +19,18 @@ export default function TabsLayout() {
   const userRole = session?.user?.role ?? (session?.user?.is_admin ? "platform_admin" : "manager");
   const isPlatformAdmin = Boolean(session?.user?.is_admin || userRole === "platform_admin");
 
-  // Privilèges de profil (RBAC mobile)
-  const canAccessPos = !isPlatformAdmin && (userRole === "manager" || userRole === "cashier");
-  const canAccessCustomers =
-    !isPlatformAdmin &&
-    (userRole === "manager" || userRole === "cashier" || userRole === "accountant");
-  const canAccessStock = !isPlatformAdmin && (userRole === "manager" || userRole === "stock_keeper");
+  // Privilèges de profil (RBAC mobile) croisés avec le Forfait entreprise actif
+  const currentPlan = session?.user?.company?.plan;
+  const planApps = currentPlan?.allowed_apps ?? ["pos", "orders", "dashboard", "inventory", "customers"];
+  const userRoleApps = session?.user?.allowed_apps;
+  const effectiveApps =
+    userRoleApps && userRoleApps.length > 0
+      ? userRoleApps.filter((a) => planApps.includes(a))
+      : planApps;
+
+  const canAccessPos = !isPlatformAdmin && effectiveApps.includes("pos");
+  const canAccessCustomers = !isPlatformAdmin && effectiveApps.includes("customers");
+  const canAccessStock = !isPlatformAdmin && effectiveApps.includes("inventory");
 
   return (
     <Tabs

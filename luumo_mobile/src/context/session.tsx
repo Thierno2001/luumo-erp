@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { AppState } from "react-native";
 import { mobileApi, setOnTrialExpired, type MobileSession } from "@/lib/api";
-import type { CompanySubscriptionInfo } from "@/lib/types";
+import type { BusinessPlanId, CompanySubscriptionInfo } from "@/lib/types";
 
 type SessionContextValue = {
   session: MobileSession | null;
@@ -9,7 +10,9 @@ type SessionContextValue = {
   login: (serverUrl: string, user: string, pass: string) => Promise<void>;
   startDemo: () => void;
   logout: () => void;
+  upgradePlan: (planId: BusinessPlanId) => Promise<void>;
   paySubscription: (input: { provider: string; phone: string; months?: number }) => Promise<void>;
+  refreshSession: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -28,6 +31,43 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
       setOnTrialExpired(null);
     };
   }, []);
+
+  const refreshSession = async () => {
+    if (!session) return;
+    if (session.mode === "live") {
+      try {
+        const fresh = await mobileApi.me();
+        if (fresh?.user) {
+          setSession((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  user: fresh.user,
+                  currency: fresh.currency ?? prev.currency,
+                }
+              : prev
+          );
+        }
+      } catch {
+        // Silencieux si réseau instable
+      }
+    }
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        refreshSession();
+      }
+    });
+    const interval = setInterval(() => {
+      refreshSession();
+    }, 30000);
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
+  }, [session?.mode]);
 
   const sub = session?.user?.company?.subscription ?? null;
   const isTrialExpired =
@@ -54,6 +94,28 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
     mobileApi.logout();
     setForceTrialExpired(false);
     setSession(null);
+  };
+
+  const upgradePlan = async (planId: BusinessPlanId) => {
+    const res = await mobileApi.upgradePlan(planId);
+    setForceTrialExpired(false);
+    if (session) {
+      const updated: MobileSession = {
+        ...session,
+        user: {
+          ...session.user,
+          allowed_apps: res.current_plan.allowed_apps,
+          company: {
+            ...session.user.company,
+            plan: res.current_plan,
+            enabled_apps: res.enabled_apps,
+            subscription: res,
+          },
+        },
+      };
+      setSession(updated);
+    }
+    await refreshSession();
   };
 
   const paySubscription = async (input: { provider: string; phone: string; months?: number }) => {
@@ -85,7 +147,9 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
         login,
         startDemo,
         logout,
+        upgradePlan,
         paySubscription,
+        refreshSession,
       }}
     >
       {children}

@@ -270,6 +270,13 @@ export const api = {
     return session;
   },
 
+  async me(): Promise<{ user: User; currency: Currency }> {
+    if (isDemo()) {
+      return { user: DEMO_USER, currency: DEMO_CURRENCY };
+    }
+    return (await get<{ user: User; currency: Currency }>("/auth/me")).data;
+  },
+
   async logout() {
     if (!isDemo()) await post("/auth/logout", {}).catch(() => undefined);
     writeSession(null);
@@ -527,6 +534,7 @@ export const api = {
     companyId: number,
     planId: BusinessPlanId
   ): Promise<CompanySubscriptionInfo> {
+    if (isDemo()) return demo.changeCompanyPlan(companyId, planId);
     return (
       await post<CompanySubscriptionInfo>(`/admin/companies/${companyId}/change-plan`, {
         plan_id: planId,
