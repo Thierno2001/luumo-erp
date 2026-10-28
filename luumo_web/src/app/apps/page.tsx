@@ -31,6 +31,17 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
+const APP_LABELS: Record<string, string> = {
+  pos: "Caisse comptoir",
+  orders: "Ventes & Factures",
+  inventory: "Inventaire & Stock",
+  customers: "Clients & Crédits",
+  dashboard: "Tableau de bord",
+  purchases: "Achats fournisseurs",
+  hr: "Employés & Salaires",
+  fleet: "Flotte de véhicules",
+};
+
 export default function SubscriptionBillingPage() {
   const { upgradePlan } = useSession();
   const [subInfo, setSubInfo] = useState<CompanySubscriptionInfo | null>(null);
@@ -107,8 +118,8 @@ export default function SubscriptionBillingPage() {
         upgradeTarget.allowed_apps.length < (currentPlan?.allowed_apps.length ?? 8);
       setSuccessMsg(
         isDowngrade
-          ? `Forfait modifié vers « ${upgradeTarget.name} ». Vos accès applicatifs sont mis à jour instantanément (vos données restent intactes).`
-          : `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Vos nouvelles applications sont débloquées instantanément.`
+          ? `Votre formule a été modifiée vers « ${upgradeTarget.name} ». Vos applications sont à jour.`
+          : `Félicitations ! Vous êtes passé au « ${upgradeTarget.name} ». Vos nouvelles applications sont prêtes.`
       );
       setUpgradeTarget(null);
       setTimeout(() => setSuccessMsg(null), 5000);
@@ -578,23 +589,22 @@ export default function SubscriptionBillingPage() {
                     <span>Passage à une formule inférieure</span>
                   </div>
                   {removedApps.length > 0 && (
-                    <p className="text-[11px] leading-relaxed">
-                      Les applications suivantes ne seront plus affichées sur votre écran d&apos;accueil :{" "}
-                      <strong>{removedApps.join(", ")}</strong>.
+                    <p className="text-xs text-[#7C2D12]">
+                      Applications masquées : <strong>{removedApps.map((a) => APP_LABELS[a] || a).join(", ")}</strong>.
                     </p>
                   )}
-                  <p className="text-[11px] text-[#7C2D12] font-medium bg-white/70 p-2.5 rounded-lg border border-[#FDBA74]/50 leading-relaxed">
-                    🔒 <strong>Zéro perte de données :</strong> Toutes les données précédemment créées (véhicules de flotte, dépenses RH, réceptions fournisseurs) restent enregistrées en toute sécurité dans votre base de données et seront immédiatement réactivées si vous repassez sur une formule supérieure.
+                  <p className="text-xs text-[#526B63] bg-white/80 p-2.5 rounded-lg border border-[#FDBA74]/40 leading-relaxed">
+                    Vos données existantes sont conservées en sécurité. Vous pourrez les retrouver à tout moment en reprenant la formule supérieure.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2 text-xs text-[#526B63]">
                   <p>
-                    Votre compte sera immédiatement surclassé vers le <strong>{upgradeTarget.name}</strong>.
+                    Votre compte sera immédiatement mis à niveau vers le <strong>{upgradeTarget.name}</strong>.
                   </p>
                   {addedApps.length > 0 && (
-                    <div className="p-2.5 rounded-lg bg-[#E8F5EE] border border-[#C6E6D5] text-[#0B6E4F] text-[11px] font-semibold">
-                      ✨ Nouvelles applications débloquées : {addedApps.join(", ")}
+                    <div className="p-2.5 rounded-lg bg-[#E8F5EE] border border-[#C6E6D5] text-[#0B6E4F] text-xs font-semibold">
+                      ✨ Nouvelles applications : {addedApps.map((a) => APP_LABELS[a] || a).join(", ")}
                     </div>
                   )}
                 </div>

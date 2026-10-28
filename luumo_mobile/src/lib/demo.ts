@@ -179,6 +179,27 @@ export const demo = {
     return { ...prod };
   },
 
+  async createProduct(input: {
+    name: string;
+    list_price: number;
+    standard_price?: number;
+    barcode?: string;
+    initial_qty?: number;
+  }): Promise<Product> {
+    const newProd = p(
+      products.length + 1,
+      input.name,
+      input.list_price,
+      input.standard_price ?? input.list_price * 0.7,
+      input.initial_qty ?? 0,
+      "Général",
+      "Unité",
+      input.barcode ?? ""
+    );
+    products.unshift(newProd);
+    return { ...newProd };
+  },
+
   async customers(search = "", debtorsOnly = false): Promise<Customer[]> {
     return customers
       .filter((cu) => cu.id !== 1)

@@ -132,6 +132,24 @@ class TestLuumoSubscriptionRules(unittest.TestCase):
         self.assertEqual(plans['retail']['price'] * 10, 1500000)
         self.assertEqual(plans['wholesale']['price'] * 10, 4500000)
 
+    def test_stock_quant_allowed_fields_contract(self):
+        """Vérifie que la création de stock quant en mode inventaire respecte le contrat
+        strict d'Odoo 18 et ne contient jamais 'company_id' (qui déclenche UserError 'Quant's creation is restricted').
+        """
+        allowed_fields = {
+            'product_id', 'location_id', 'inventory_quantity', 'inventory_quantity_auto_apply',
+            'inventory_diff_quantity', 'inventory_date', 'user_id', 'inventory_quantity_set',
+            'is_outdated', 'lot_id', 'package_id', 'owner_id'
+        }
+        test_payload = {
+            'product_id': 64,
+            'location_id': 117,
+            'inventory_quantity': 10.0,
+        }
+        for k in test_payload.keys():
+            self.assertIn(k, allowed_fields, f"Le champ {k} est interdit par Odoo 18 dans stock.quant create")
+        self.assertNotIn('company_id', test_payload)
+
     def test_inventory_present_in_all_plans(self):
         # Règle Métier Luumo : l'application Inventaire/Catalogue doit être incluse
         # dans TOUS les forfaits pour permettre la gestion des articles, pièces et prix.

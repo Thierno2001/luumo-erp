@@ -193,12 +193,13 @@ def validate_picking_delivery(order_or_po):
 def set_product_stock(env, product, qty):
     """Ajuste le stock physique disponible dans l'entrepôt principal de la société active."""
     warehouse = ensure_company_warehouse(env, env.company)
-    env['stock.quant'].with_context(inventory_mode=True).create({
+    su_env = env(user=SUPERUSER_ID)
+    quant = su_env['stock.quant'].with_context(inventory_mode=True).create({
         'product_id': product.id,
         'location_id': warehouse.lot_stock_id.id,
-        'inventory_quantity': max(0.0, qty),
-        'company_id': env.company.id,
-    }).action_apply_inventory()
+        'inventory_quantity': max(0.0, float(qty)),
+    })
+    quant.action_apply_inventory()
 
 
 def get_or_create_walkin_partner(env):

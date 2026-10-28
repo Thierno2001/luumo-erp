@@ -244,6 +244,20 @@ export const mobileApi = {
     });
   },
 
+  async createProduct(input: {
+    name: string;
+    list_price: number;
+    standard_price?: number;
+    barcode?: string;
+    initial_qty?: number;
+  }): Promise<Product> {
+    if (currentSession?.mode === "demo") return demo.createProduct(input);
+    return call<Product>("/products/create", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
   async customers(search = "", debtorsOnly = false): Promise<Customer[]> {
     if (currentSession?.mode === "demo") return demo.customers(search, debtorsOnly);
     const params = new URLSearchParams();
