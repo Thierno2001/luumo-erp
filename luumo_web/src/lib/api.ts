@@ -282,15 +282,57 @@ export const api = {
     writeSession(null);
   },
 
+  async requestOtp(input: {
+    login: string;
+    purpose?: "password_reset" | "change_password" | "account_verify";
+    channel?: "email" | "sms" | "both";
+    phone?: string;
+  }): Promise<{ success: boolean; message: string; channel: string; expires_in: number; masked_target: string; _debug_code?: string }> {
+    if (isDemo()) {
+      return {
+        success: true,
+        message: "Code de vérification démo envoyé : 123456",
+        channel: input.channel || "email",
+        expires_in: 600,
+        masked_target: input.login,
+        _debug_code: "123456",
+      };
+    }
+    return (await post<any>("/auth/otp/request", input)).data;
+  },
+
+  async verifyOtp(input: {
+    login: string;
+    code: string;
+    purpose?: string;
+  }): Promise<{ valid: boolean; message: string }> {
+    if (isDemo()) {
+      return { valid: input.code === "123456", message: "Code démo validé." };
+    }
+    return (await post<{ valid: boolean; message: string }>("/auth/otp/verify", input)).data;
+  },
+
   async resetPassword(input: {
     login: string;
-    phone: string;
     new_password: string;
+    code?: string;
+    phone?: string;
   }): Promise<{ message: string; login: string }> {
     if (isDemo()) {
       return { message: "Mot de passe réinitialisé avec succès (Mode démo).", login: input.login };
     }
     return (await post<{ message: string; login: string }>("/auth/reset-password", input)).data;
+  },
+
+  async changePassword(input: {
+    old_password: string;
+    code: string;
+    new_password: string;
+  }): Promise<{ message: string }> {
+    if (isDemo()) {
+      return { message: "Votre mot de passe a été modifié avec succès (Mode démo)." };
+    }
+    return (await post<{ message: string }>("/auth/change-password", input)).data;
   },
 
   async dashboard(): Promise<Dashboard> {

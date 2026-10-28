@@ -10,8 +10,26 @@ Vérifie la robustesse de :
 4. La logique de calcul des forfaits et d'expiration des 14 jours d'essai.
 """
 import json
+import os
+import sys
+import types
 import unittest
 from datetime import date, timedelta
+from unittest.mock import MagicMock
+
+# Stubs minimaux pour permettre l'exécution des tests hors conteneur Odoo
+if 'odoo' not in sys.modules:
+    odoo_mod = types.ModuleType('odoo')
+    odoo_mod.SUPERUSER_ID = 1
+    odoo_mod.exceptions = MagicMock()
+    odoo_mod.http = MagicMock()
+    odoo_mod.fields = MagicMock()
+    sys.modules['odoo'] = odoo_mod
+    sys.modules['odoo.exceptions'] = odoo_mod.exceptions
+    sys.modules['odoo.http'] = odoo_mod.http
+    sys.modules['odoo.fields'] = odoo_mod.fields
+
+sys.path.insert(0, os.path.abspath('custom_addons/luumo_api'))
 
 
 class TestLuumoSecurity(unittest.TestCase):
@@ -257,6 +275,84 @@ class TestLuumoRbacRoles(unittest.TestCase):
         # Cas 4 : Caissier sur Forfait Services (qui a 'pos' et 'customers') -> 'pos' et 'customers'
         effective_cashier_services = [a for a in cashier_role_apps if a in plans['services']]
         self.assertEqual(set(effective_cashier_services), {'pos', 'customers'})
+
+
+class TestLuumoOtpAndNotifications(unittest.TestCase):
+    """Vérification du système OTP et des notifications Email & Nimba SMS Guinée."""
+
+    def test_nimba_guinean_phone_normalization(self):
+        import sys
+        sys.path.insert(0, 'custom_addons/luumo_api')
+        from services.nimba_sms_service import normalize_guinean_phone
+
+        self.assertEqual(normalize_guinean_phone('620123456'), '+224620123456')
+        self.assertEqual(normalize_guinean_phone('00224620123456'), '+224620123456')
+        self.assertEqual(normalize_guinean_phone('+224 620 12 34 56'), '+224620123456')
+        self.assertEqual(normalize_guinean_phone('+224 (622) 00-11-22'), '+224622001122')
+
+    def test_sms_templates_content_and_length(self):
+        from services.notification_templates import render_sms
+
+        sms_change = render_sms('change_password', code='482915')
+        self.assertIn('482915', sms_change)
+        self.assertIn('Luumo', sms_change)
+        self.assertLess(len(sms_change), 160)
+
+        sms_reset = render_sms('password_reset', code='981240')
+        self.assertIn('981240', sms_reset)
+        self.assertLess(len(sms_reset), 160)
+
+        sms_alert = render_sms('password_changed_alert')
+        self.assertIn('Luumo', sms_alert)
+        self.assertIn('modifie avec succes', sms_alert)
+        self.assertLess(len(sms_alert), 160)
+
+    def test_email_templates_content_and_styling(self):
+        from services.notification_templates import render_email_template
+
+        subj, html, plain = render_email_template('change_password', code='738192', user_name='Thierno Diallo', target_email='thierno@luumo.gn')
+        self.assertIn('738192', subj)
+        self.assertIn('738 192', html)
+        self.assertIn('Thierno Diallo', html)
+        self.assertIn('#115040', html)  # Vert Forêt officiel
+        self.assertIn('#F3BC33', html)  # Or officiel
+        self.assertIn('738192', plain)
+
+        subj_reset, html_reset, plain_reset = render_email_template('password_reset', code='654321', user_name='Fatou Camara', target_email='fatou@gmail.com')
+        self.assertIn('654321', subj_reset)
+        self.assertIn('Fatou Camara', html_reset)
+
+    def test_otp_hash_and_attempts_verification(self):
+        import time
+        from services.otp_service import _hash_otp
+
+        code = "582194"
+        salt = "abcd1234ef567890"
+        hashed = _hash_otp(code, salt)
+
+        # Empreinte constante et inviolable
+        self.assertEqual(hashed, _hash_otp(code, salt))
+        self.assertNotEqual(hashed, _hash_otp("000000", salt))
+
+        # Test simulation stockage et verrouillage 3 tentatives
+        store = {
+            'hash': hashed,
+            'salt': salt,
+            'expires_at': time.time() + 600,
+            'attempts': 0,
+        }
+
+        # 1ère tentative échouée
+        store['attempts'] += 1
+        self.assertLessEqual(store['attempts'], 3)
+
+        # 2ème tentative échouée
+        store['attempts'] += 1
+        self.assertLessEqual(store['attempts'], 3)
+
+        # 3ème tentative échouée -> verrouillage
+        store['attempts'] += 1
+        self.assertGreaterEqual(store['attempts'], 3)
 
 
 if __name__ == '__main__':

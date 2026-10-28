@@ -35,6 +35,10 @@ from ..services.security_owasp import (
     validate_phone,
     validate_vat_nif,
 )
+from ..services.otp_service import generate_and_send_otp, verify_otp
+from ..services.email_service import send_email
+from ..services.nimba_sms_service import send_nimba_sms
+from ..services.notification_templates import render_email_template, render_sms
 
 _logger = logging.getLogger(__name__)
 
@@ -290,11 +294,65 @@ class LuumoAuthController(LuumoBaseController):
         request.session.logout(keep_db=True)
         return self._ok({'logged_out': True})
 
+    @luumo_route('/auth/otp/request', ['POST'], auth='none')
+    def auth_otp_request(self):
+        """Demande d'envoi d'un code OTP par Email (luumo.guinee@gmail.com) ou Nimba SMS."""
+        try:
+            p = self._payload()
+            login = validate_email(p.get('login'), required=True)
+            purpose = clean_text(p.get('purpose') or 'password_reset', "Motif de vérification", max_len=30)
+            channel = clean_text(p.get('channel') or 'email', "Canal", max_len=10)
+            phone = clean_text(p.get('phone') or '', "Téléphone", max_len=30, required=False)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        if purpose not in ('password_reset', 'change_password', 'account_verify'):
+            return self._error("Motif de vérification non reconnu.", 400)
+
+        su_env = request.env(user=SUPERUSER_ID)
+        user = su_env['res.users'].search([('login', '=ilike', login)], limit=1)
+
+        # En cas de changement de mot de passe ou réinitialisation, le compte doit exister
+        if purpose in ('password_reset', 'change_password') and not user:
+            return self._error("Compte introuvable pour cet identifiant.", 404)
+
+        user_name = user.name if user else 'Commerçant'
+        target_phone = phone or (user and (user.partner_id.phone or user.company_id.phone)) or ''
+
+        res = generate_and_send_otp(
+            env=su_env,
+            target_login=login,
+            purpose=purpose,
+            channel=channel,
+            phone=target_phone,
+            user_name=user_name,
+        )
+        if not res.get('success'):
+            return self._error(res.get('error', "Échec de l'envoi du code."), 429 if 'retry_after' in res else 500)
+
+        return self._ok(res)
+
+    @luumo_route('/auth/otp/verify', ['POST'], auth='none')
+    def auth_otp_verify(self):
+        """Vérification unitaire d'un code OTP (sans le consommer immédiatement)."""
+        try:
+            p = self._payload()
+            login = validate_email(p.get('login'), required=True)
+            code = clean_text(p.get('code'), "Code OTP", min_len=6, max_len=6, required=True)
+            purpose = clean_text(p.get('purpose') or 'password_reset', "Motif", max_len=30)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        su_env = request.env(user=SUPERUSER_ID)
+        is_valid, err_msg = verify_otp(su_env, login, code, purpose=purpose, consume=False)
+        if not is_valid:
+            return self._error(err_msg, 400)
+
+        return self._ok({'valid': True, 'message': "Code de sécurité valide."})
+
     @luumo_route('/auth/reset-password', ['POST'], auth='none')
     def auth_reset_password(self):
-        """Réinitialisation de mot de passe en libre-service sécurisé.
-        Vérifie l'identifiant email et le numéro de téléphone enregistré du compte.
-        """
+        """Réinitialisation de mot de passe en libre-service sécurisé avec validation par code OTP ou téléphone."""
         ip = self._client_ip()
         ip_ok, ip_wait = check_rate_limit(f'reset_ip:{ip}', max_attempts=5, window_seconds=900)
         if not ip_ok:
@@ -307,7 +365,8 @@ class LuumoAuthController(LuumoBaseController):
         try:
             p = self._payload()
             login = validate_email(p.get('login'), required=True)
-            phone = clean_text(p.get('phone'), "Téléphone commerçant", min_len=6, max_len=30, required=True)
+            code = clean_text(p.get('code') or '', "Code de vérification", max_len=10, required=False)
+            phone = clean_text(p.get('phone') or '', "Téléphone commerçant", max_len=30, required=False)
             new_password = p.get('new_password') or p.get('password') or ''
         except ValidationError as e:
             return self._error(str(e), 422)
@@ -317,18 +376,27 @@ class LuumoAuthController(LuumoBaseController):
         if not user:
             return self._error("Compte introuvable pour cet identifiant.", 404)
 
-        user_phone = (user.partner_id.phone or user.company_id.phone or '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-        provided_phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        # 1. Vérification par code OTP (méthode standard sécurisée)
+        if code:
+            is_valid, err_msg = verify_otp(su_env, user.login, code, purpose='password_reset', consume=True)
+            if not is_valid:
+                return self._error(err_msg, 400)
+        elif phone:
+            # 2. Rétro-compatibilité : validation croisée par téléphone
+            user_phone = (user.partner_id.phone or user.company_id.phone or '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+            provided_phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
 
-        clean_user_digits = ''.join([d for d in user_phone if d.isdigit()])
-        clean_provided_digits = ''.join([d for d in provided_phone if d.isdigit()])
+            clean_user_digits = ''.join([d for d in user_phone if d.isdigit()])
+            clean_provided_digits = ''.join([d for d in provided_phone if d.isdigit()])
 
-        if len(clean_provided_digits) < 6 or len(clean_user_digits) < 6:
-            return self._error("Numéro de téléphone incomplet pour valider votre compte.", 400)
+            if len(clean_provided_digits) < 6 or len(clean_user_digits) < 6:
+                return self._error("Numéro de téléphone incomplet pour valider votre compte.", 400)
 
-        cmp_len = min(8, len(clean_provided_digits), len(clean_user_digits))
-        if clean_provided_digits[-cmp_len:] != clean_user_digits[-cmp_len:]:
-            return self._error("Le numéro de téléphone ne correspond pas au compte enregistré.", 403)
+            cmp_len = min(8, len(clean_provided_digits), len(clean_user_digits))
+            if clean_provided_digits[-cmp_len:] != clean_user_digits[-cmp_len:]:
+                return self._error("Le numéro de téléphone ne correspond pas au compte enregistré.", 403)
+        else:
+            return self._error("Veuillez renseigner le code de vérification reçu par email ou votre numéro de téléphone.", 400)
 
         try:
             validate_password_owasp(new_password, login=user.login, name=user.name)
@@ -342,9 +410,68 @@ class LuumoAuthController(LuumoBaseController):
         clear_rate_limit(f'login_acct:{user.login}')
         clear_rate_limit(f'login_ip:{ip}')
 
+        # Alerte de confirmation
+        try:
+            user_phone = user.partner_id.phone or user.company_id.phone
+            send_nimba_sms(su_env, user_phone, render_sms('password_changed_alert'))
+            subj, html, plain = render_email_template('password_changed_alert', user_name=user.name, target_email=user.login)
+            send_email(su_env, user.login, subj, html, plain)
+        except Exception as notify_err:
+            _logger.warning("Notification post-réinitialisation ignorée : %s", str(notify_err))
+
         return self._ok({
             'message': "Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.",
             'login': user.login,
+        })
+
+    @luumo_route('/auth/change-password', ['POST'])
+    def auth_change_password(self):
+        """Changement de mot de passe sécurisé pour l'utilisateur connecté avec code OTP."""
+        user = request.env.user
+        if not user or user._is_public():
+            return self._error("Authentification requise pour cette opération.", 401)
+
+        try:
+            p = self._payload()
+            old_password = p.get('old_password') or ''
+            code = clean_text(p.get('code') or '', "Code de vérification", max_len=10, required=True)
+            new_password = p.get('new_password') or ''
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        # Vérifier l'ancien mot de passe
+        try:
+            user._check_credentials(old_password, {'type': 'password', 'interactive': True})
+        except AccessDenied:
+            return self._error("L'ancien mot de passe est incorrect.", 403)
+
+        su_env = request.env(user=SUPERUSER_ID)
+
+        # Vérifier le code OTP
+        is_valid, err_msg = verify_otp(su_env, user.login, code, purpose='change_password', consume=True)
+        if not is_valid:
+            return self._error(err_msg, 400)
+
+        # Vérifier politique OWASP
+        try:
+            validate_password_owasp(new_password, login=user.login, name=user.name)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        user.sudo().write({'password': new_password})
+        su_env.cr.commit()
+
+        # Notification de confirmation
+        try:
+            user_phone = user.partner_id.phone or user.company_id.phone
+            send_nimba_sms(su_env, user_phone, render_sms('password_changed_alert'))
+            subj, html, plain = render_email_template('password_changed_alert', user_name=user.name, target_email=user.login)
+            send_email(su_env, user.login, subj, html, plain)
+        except Exception as notify_err:
+            _logger.warning("Notification post-modification ignorée : %s", str(notify_err))
+
+        return self._ok({
+            'message': "Votre mot de passe a été modifié avec succès.",
         })
 
     @luumo_route('/company/subscription', ['GET'])

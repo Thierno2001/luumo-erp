@@ -15,6 +15,9 @@ import {
   Phone,
   KeyRound,
   X,
+  Mail,
+  MessageSquare,
+  RotateCcw,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { api } from "@/lib/api";
@@ -28,14 +31,27 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal Mot de passe oublié
+  // Modal Mot de passe oublié avec vérification OTP
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotLogin, setForgotLogin] = useState("");
   const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotChannel, setForgotChannel] = useState<"email" | "sms" | "both">("email");
+  const [forgotCode, setForgotCode] = useState("");
   const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotMaskedTarget, setForgotMaskedTarget] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((c) => c - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +70,36 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotSubmit = async (e: React.FormEvent) => {
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!forgotLogin.trim()) {
+      setForgotError("Veuillez renseigner votre email commerçant.");
+      return;
+    }
+    setForgotError(null);
+    setForgotSuccess(null);
+    setForgotLoading(true);
+    try {
+      const res = await api.requestOtp({
+        login: forgotLogin.trim(),
+        purpose: "password_reset",
+        channel: forgotChannel,
+        phone: forgotPhone.trim() || undefined,
+      });
+      setForgotMaskedTarget(res.masked_target || forgotLogin.trim());
+      setForgotSuccess(res.message);
+      setForgotStep(2);
+      setResendCooldown(60);
+    } catch (err) {
+      setForgotError(
+        err instanceof Error ? err.message : "Échec de l'envoi du code de vérification."
+      );
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError(null);
     setForgotSuccess(null);
@@ -62,7 +107,8 @@ export default function LoginPage() {
     try {
       const res = await api.resetPassword({
         login: forgotLogin.trim(),
-        phone: forgotPhone.trim(),
+        code: forgotCode.trim(),
+        phone: forgotPhone.trim() || undefined,
         new_password: forgotNewPassword,
       });
       setForgotSuccess(res.message);
@@ -70,6 +116,8 @@ export default function LoginPage() {
       setPassword(forgotNewPassword);
       setTimeout(() => {
         setForgotOpen(false);
+        setForgotStep(1);
+        setForgotCode("");
         setForgotSuccess(null);
         setError(null);
       }, 2500);
@@ -234,7 +282,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Modal Réinitialisation Mot de passe */}
+        {/* Modal Réinitialisation Mot de passe avec Vérification OTP & Nimba SMS */}
         {forgotOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-[#0B231B] border border-[#1E4D3B] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative text-left">
@@ -245,12 +293,19 @@ export default function LoginPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white">Réinitialiser mon mot de passe</h3>
-                    <p className="text-[11px] text-[#8FAEA1]">Vérification par email et numéro commerçant</p>
+                    <p className="text-[11px] text-[#8FAEA1]">
+                      {forgotStep === 1
+                        ? "Étape 1/2 : Envoi du code de sécurité"
+                        : "Étape 2/2 : Saisie du code et nouveau mot de passe"}
+                    </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setForgotOpen(false)}
+                  onClick={() => {
+                    setForgotOpen(false);
+                    setForgotStep(1);
+                  }}
                   className="text-[#8FAEA1] hover:text-white transition p-1"
                 >
                   <X className="w-4 h-4" />
@@ -271,85 +326,207 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <form onSubmit={handleForgotSubmit} className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
-                    Email / Identifiant commerçant
-                  </label>
-                  <div className="relative">
-                    <UserIcon className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {forgotStep === 1 ? (
+                /* ÉTAPE 1 : CHOIX CANAL ET DEMANDE DU CODE OTP */
+                <form onSubmit={handleRequestOtp} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                      Email / Identifiant commerçant
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        value={forgotLogin}
+                        onChange={(e) => setForgotLogin(e.target.value)}
+                        placeholder="contact@entreprise.gn"
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#D1E2DB] mb-1.5">
+                      Canal de réception du code
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForgotChannel("email")}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition ${
+                          forgotChannel === "email"
+                            ? "bg-[#0B6E4F] border-[#34D399] text-white"
+                            : "border-[#1E4D3B] text-[#8FAEA1] hover:text-white"
+                        }`}
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Email (Gratuit)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForgotChannel("sms")}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition ${
+                          forgotChannel === "sms"
+                            ? "bg-[#0B6E4F] border-[#34D399] text-white"
+                            : "border-[#1E4D3B] text-[#8FAEA1] hover:text-white"
+                        }`}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Nimba SMS</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForgotChannel("both")}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition ${
+                          forgotChannel === "both"
+                            ? "bg-[#0B6E4F] border-[#34D399] text-white"
+                            : "border-[#1E4D3B] text-[#8FAEA1] hover:text-white"
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#F3BC33]" />
+                        <span>Les deux</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {(forgotChannel === "sms" || forgotChannel === "both") && (
+                    <div>
+                      <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                        Numéro de téléphone (+224 Nimba SMS)
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="tel"
+                          required={forgotChannel === "sms"}
+                          value={forgotPhone}
+                          onChange={(e) => setForgotPhone(e.target.value)}
+                          placeholder="+224 620 00 00 00"
+                          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setForgotOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-[#1E4D3B] text-xs font-semibold text-[#8FAEA1] hover:text-white hover:bg-[#11382A] transition cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="px-4 py-2 rounded-xl bg-[#0B6E4F] hover:bg-[#0E8A63] text-white text-xs font-bold transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {forgotLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          <span>Envoi du code...</span>
+                        </>
+                      ) : (
+                        <span>Envoyer le code de vérification →</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ÉTAPE 2 : VALIDATION DU CODE OTP ET NOUVEAU MOT DE PASSE */
+                <form onSubmit={handleResetSubmit} className="space-y-3.5">
+                  <div className="p-3 rounded-xl bg-[#11382A]/70 border border-[#1E523F] text-xs text-[#C6E6D5] flex items-center justify-between">
+                    <div>
+                      <span>Code envoyé à </span>
+                      <strong className="text-white">{forgotMaskedTarget}</strong>
+                      <span className="block text-[10px] text-[#8FAEA1]">Valide pendant 10 minutes</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForgotStep(1)}
+                      className="text-[11px] text-[#F3BC33] hover:underline"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                      Code de vérification à 6 chiffres
+                    </label>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      value={forgotLogin}
-                      onChange={(e) => setForgotLogin(e.target.value)}
-                      placeholder="contact@entreprise.gn"
-                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                      maxLength={6}
+                      value={forgotCode}
+                      onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="• • • • • •"
+                      className="w-full text-center py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-lg font-mono font-bold tracking-[0.4em] placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
-                    Numéro de téléphone commerçant (enregistré à la création)
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="tel"
-                      required
-                      value={forgotPhone}
-                      onChange={(e) => setForgotPhone(e.target.value)}
-                      placeholder="+224 620 00 00 00"
-                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
-                    />
+                  <div>
+                    <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                      Nouveau mot de passe
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        required
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        placeholder="Min. 12 car, 1 Maj, 1 Chiffre, 1 Symbole"
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                      />
+                    </div>
                   </div>
-                  <p className="text-[10px] text-[#708F83] mt-1">
-                    Sert de validation de sécurité pour attester que vous êtes le propriétaire du compte.
-                  </p>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
-                    Nouveau mot de passe
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="password"
-                      required
-                      value={forgotNewPassword}
-                      onChange={(e) => setForgotNewPassword(e.target.value)}
-                      placeholder="Min. 12 car, 1 Maj, 1 Chiffre, 1 Symbole"
-                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
-                    />
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      disabled={resendCooldown > 0 || forgotLoading}
+                      onClick={() => handleRequestOtp()}
+                      className="text-[11px] text-[#8FAEA1] hover:text-[#F3BC33] transition disabled:opacity-40 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>
+                        {resendCooldown > 0
+                          ? `Renvoyer un code (${resendCooldown}s)`
+                          : "Renvoyer un code"}
+                      </span>
+                    </button>
                   </div>
-                </div>
 
-                <div className="pt-2 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setForgotOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-[#1E4D3B] text-xs font-semibold text-[#8FAEA1] hover:text-white hover:bg-[#11382A] transition cursor-pointer"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={forgotLoading}
-                    className="px-4 py-2 rounded-xl bg-[#0B6E4F] hover:bg-[#0E8A63] text-white text-xs font-bold transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {forgotLoading ? (
-                      <>
-                        <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        <span>Validation...</span>
-                      </>
-                    ) : (
-                      <span>Définir le nouveau mot de passe</span>
-                    )}
-                  </button>
-                </div>
-              </form>
+                  <div className="pt-2 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotOpen(false);
+                        setForgotStep(1);
+                      }}
+                      className="px-4 py-2 rounded-xl border border-[#1E4D3B] text-xs font-semibold text-[#8FAEA1] hover:text-white hover:bg-[#11382A] transition cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading || forgotCode.length !== 6}
+                      className="px-4 py-2 rounded-xl bg-[#0B6E4F] hover:bg-[#0E8A63] text-white text-xs font-bold transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {forgotLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          <span>Validation...</span>
+                        </>
+                      ) : (
+                        <span>Valider et réinitialiser</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}

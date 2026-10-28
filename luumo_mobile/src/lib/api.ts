@@ -188,9 +188,26 @@ export const mobileApi = {
     return session;
   },
 
+  async requestOtp(
+    serverUrl: string,
+    input: { login: string; purpose?: string; channel?: "email" | "sms" | "both"; phone?: string }
+  ): Promise<{ success: boolean; message: string; channel: string; expires_in: number; masked_target: string }> {
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/otp/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || "Échec d'envoi du code de vérification");
+    }
+    return body.data;
+  },
+
   async resetPassword(
     serverUrl: string,
-    input: { login: string; phone: string; new_password: string }
+    input: { login: string; new_password: string; code?: string; phone?: string }
   ): Promise<{ message: string; login: string }> {
     const cleanUrl = serverUrl.replace(/\/+$/, "");
     const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/reset-password`, {
