@@ -35,7 +35,7 @@ from ..services.security_owasp import (
     validate_phone,
     validate_vat_nif,
 )
-from ..services.otp_service import generate_and_send_otp, verify_otp
+from ..services.otp_service import generate_and_send_otp, verify_otp, resend_smart_otp_sms
 from ..services.email_service import send_email
 from ..services.nimba_sms_service import send_nimba_sms
 from ..services.notification_templates import render_email_template, render_sms
@@ -119,11 +119,83 @@ class LuumoAuthController(LuumoBaseController):
             'currency': self._currency(),
         })
 
+    @luumo_route('/auth/register/request-otp', ['POST'], auth='none')
+    def auth_register_request_otp(self):
+        """Étape 1 Inscription : valide les données saisies et expédie le code OTP par Email (Règle 1: Gratuit)."""
+        ip = self._client_ip()
+        reg_ok, reg_wait = check_rate_limit(f'register_ip:{ip}', max_attempts=5, window_seconds=900)
+        if not reg_ok:
+            return self._error(
+                f"Trop de demandes de création de compte depuis cette adresse. Réessayez dans {reg_wait} secondes.",
+                429,
+                headers={'Retry-After': reg_wait},
+            )
+
+        try:
+            p = self._payload()
+            company_name = clean_text(p.get('company_name'), "Nom de l'entreprise", min_len=2, max_len=100, required=True)
+            admin_name = clean_text(p.get('admin_name') or p.get('name'), 'Nom complet du gérant', min_len=2, max_len=100, required=True)
+            login = validate_email(p.get('login'), required=True)
+            phone = validate_phone(p.get('phone'), required=True)
+            password = p.get('password') or ''
+            validate_password_owasp(password, login=login, name=admin_name, company_name=company_name)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        su_env = request.env(user=SUPERUSER_ID)
+        existing = su_env['res.users'].search([('login', '=ilike', login)], limit=1)
+        if existing:
+            return self._error("Impossible de créer un compte avec cet identifiant (email déjà existant).", 409)
+
+        # Envoi intelligent : Email d'abord (100% gratuit)
+        res = generate_and_send_otp(
+            env=su_env,
+            target_login=login,
+            purpose='account_verify',
+            channel='email',
+            phone=phone,
+            user_name=admin_name,
+        )
+        if not res.get('success'):
+            return self._error(res.get('error', "Échec de l'envoi du code d'activation."), 429 if 'retry_after' in res else 500)
+
+        return self._ok({
+            'message': f"Code d'activation envoyé par email à {res.get('masked_target')}.",
+            'masked_email': res.get('masked_target'),
+            'cooldown_sms': 45,
+            '_debug_code': res.get('_debug_code'),
+        })
+
+    @luumo_route('/auth/register/resend-sms', ['POST'], auth='none')
+    def auth_register_resend_sms(self):
+        """Bascule de secours intelligente sur Nimba SMS après 45s (Règles 2 & 3: même code, max 3 SMS/24h)."""
+        try:
+            p = self._payload()
+            login = validate_email(p.get('login'), required=True)
+            phone = clean_text(p.get('phone'), "Téléphone commerçant", min_len=6, max_len=30, required=True)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        su_env = request.env(user=SUPERUSER_ID)
+        res = resend_smart_otp_sms(su_env, target_login=login, purpose='account_verify', phone=phone)
+        if not res.get('success'):
+            return self._error(res.get('error'), 429 if 'retry_after' in res else 400)
+
+        return self._ok(res)
+
     @luumo_route('/auth/register', ['POST'], auth='none')
     def auth_register(self):
         """Enregistre une nouvelle Entreprise (`res.company`) et son gérant (`res.users`)
-        avec cloisonnement Multi-Sociétés et principe du moindre privilège.
+        avec vérification obligatoire du code d'activation OTP.
         """
+        return self._do_register()
+
+    @luumo_route('/auth/register/confirm', ['POST'], auth='none')
+    def auth_register_confirm(self):
+        """Finalisation de l'inscription avec validation du code OTP."""
+        return self._do_register()
+
+    def _do_register(self):
         ip = self._client_ip()
         reg_ok, reg_wait = check_rate_limit(f'register_ip:{ip}', max_attempts=5, window_seconds=900)
         if not reg_ok:
@@ -143,6 +215,7 @@ class LuumoAuthController(LuumoBaseController):
             nif_rccm = validate_vat_nif(p.get('nif_rccm'), required=False)
             business_profile = clean_text(p.get('business_profile') or 'retail', 'Profil métier', max_len=30)
             password = p.get('password') or ''
+            code = clean_text(p.get('code') or '', "Code d'activation", min_len=6, max_len=6, required=True)
 
             validate_password_owasp(
                 password, login=login, name=admin_name, company_name=company_name,
@@ -150,12 +223,18 @@ class LuumoAuthController(LuumoBaseController):
         except ValidationError as e:
             return self._error(str(e), 422)
 
+        su_env = request.env(user=SUPERUSER_ID)
+
+        # Vérification obligatoire du code OTP d'activation (Règle 4)
+        is_valid, err_msg = verify_otp(su_env, login, code, purpose='account_verify', consume=True)
+        if not is_valid:
+            return self._error(err_msg or "Code d'activation obligatoire ou invalide.", 400)
+
         db = p.get('db') or request.db
         if not db:
             return self._error('Aucune base de données configurée sur le serveur.', 400)
 
         try:
-            su_env = request.env(user=SUPERUSER_ID)
             existing = su_env['res.users'].search([('login', '=ilike', login)], limit=1)
             if existing:
                 return self._error(
@@ -228,6 +307,13 @@ class LuumoAuthController(LuumoBaseController):
             plan = get_company_plan(su_env, company)
             enabled_apps = get_company_enabled_apps(su_env, company)
             subscription = get_company_subscription_info(su_env, company)
+
+            # Notification de bienvenue post-création
+            try:
+                send_nimba_sms(su_env, phone, render_sms('account_verify', code='ACTIVÉ'))
+            except Exception as e:
+                _logger.warning("Notification bienvenue SMS ignorée : %s", str(e))
+
             return self._ok({
                 'session_id': request.session.sid,
                 'user': {

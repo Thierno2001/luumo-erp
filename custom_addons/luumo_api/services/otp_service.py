@@ -68,19 +68,6 @@ def generate_and_send_otp(env, target_login, purpose, channel='email', phone=Non
     now = time.time()
     expires_at = now + OTP_VALIDITY_SECONDS
 
-    # Enregistrement en base chiffré
-    record = {
-        'hash': code_hash,
-        'salt': salt,
-        'expires_at': expires_at,
-        'attempts': 0,
-        'purpose': purpose,
-        'target': target_login,
-        'phone': phone or '',
-    }
-    param_key = f"luumo_otp_{purpose}_{clean_target}"
-    env['ir.config_parameter'].sudo().set_param(param_key, json.dumps(record))
-
     email_result = None
     sms_result = None
     channels_used = []
@@ -108,6 +95,29 @@ def generate_and_send_otp(env, target_login, purpose, channel='email', phone=Non
         if sms_result.get('success'):
             channels_used.append('sms')
 
+    # Enregistrement en base chiffré
+    record = {
+        'code': code,
+        'hash': code_hash,
+        'salt': salt,
+        'created_at': now,
+        'expires_at': expires_at,
+        'attempts': 0,
+        'purpose': purpose,
+        'target': target_login,
+        'phone': phone or '',
+        'sms_count': 1 if 'sms' in channels_used else 0,
+        'last_sms_time': now if 'sms' in channels_used else 0,
+    }
+    param_key = f"luumo_otp_{purpose}_{clean_target}"
+    env['ir.config_parameter'].sudo().set_param(param_key, json.dumps(record))
+
+    # Mettre à jour les compteurs si SMS expédié
+    if 'sms' in channels_used:
+        record['sms_count'] = 1
+        record['last_sms_time'] = now
+        env['ir.config_parameter'].sudo().set_param(param_key, json.dumps(record))
+
     # Masquer l'email pour le retour UX (ex: c***o@gmail.com)
     parts = target_login.split('@')
     masked_target = f"{parts[0][0]}***{parts[0][-1]}@{parts[1]}" if len(parts) == 2 and len(parts[0]) > 2 else target_login
@@ -120,8 +130,88 @@ def generate_and_send_otp(env, target_login, purpose, channel='email', phone=Non
         'masked_target': masked_target,
         'email_sent': bool(email_result and email_result.get('success')),
         'sms_sent': bool(sms_result and sms_result.get('success')),
+        'cooldown_sms': 45,
         # Conserve le code en debug/simulation pour fluidifier les tests unitaires
         '_debug_code': code if (email_result and email_result.get('simulated')) else None,
+    }
+
+
+def resend_smart_otp_sms(env, target_login, purpose, phone=None):
+    """Bascule intelligemment sur Nimba SMS pour renvoyer le MÊME code actif (Règles d'économie 2 & 3).
+
+    Applique :
+    - Cooldown minimum de 45 secondes avant d'autoriser un SMS.
+    - Plafond de 3 SMS max par cible par 24h.
+    - Validation du préfixe mobile guinéen (+224 6xx).
+    - Réutilisation du même code à 6 chiffres (pas de double code).
+    """
+    clean_target = _clean_key(target_login)
+    param_key = f"luumo_otp_{purpose}_{clean_target}"
+    raw_record = env['ir.config_parameter'].sudo().get_param(param_key, default=None)
+
+    if not raw_record:
+        return {'success': False, 'error': "Aucun code en attente. Veuillez d'abord initier la demande."}
+
+    try:
+        record = json.loads(raw_record)
+    except Exception:
+        return {'success': False, 'error': "Données de vérification corrompues."}
+
+    now = time.time()
+    if now > record.get('expires_at', 0):
+        return {'success': False, 'error': "Le code a expiré. Veuillez redemander un nouveau code."}
+
+    # Règle 3 : Cooldown 45 secondes
+    last_sms = record.get('last_sms_time', 0)
+    created_at = record.get('created_at', 0)
+    reference_time = last_sms if last_sms > 0 else created_at
+    elapsed = now - reference_time
+    if elapsed < 45:
+        wait_seconds = int(45 - elapsed)
+        return {
+            'success': False,
+            'error': f"Veuillez patienter encore {wait_seconds} secondes avant de demander un SMS.",
+            'retry_after': wait_seconds,
+        }
+
+    # Règle 3 : Plafond 3 SMS max
+    sms_count = record.get('sms_count', 0)
+    if sms_count >= 3:
+        return {
+            'success': False,
+            'error': "Limite de SMS atteinte (3 max par 24h). Veuillez consulter votre boîte email.",
+        }
+
+    target_phone = phone or record.get('phone') or ''
+    normalized_phone = normalize_guinean_phone(target_phone)
+    # Vérification stricte préfixe mobile guinéen (+224 6xx...)
+    if not re.match(r'^\+2246\d{8}$', normalized_phone):
+        return {
+            'success': False,
+            'error': "Numéro mobile guinéen non reconnu. Les numéros mobiles doivent commencer par +224 6xx.",
+        }
+
+    code = record.get('code')
+    if not code:
+        return {'success': False, 'error': "Code introuvable. Veuillez réinitialiser la demande."}
+
+    # Expédition Nimba SMS
+    sms_res = send_otp_sms(env, normalized_phone, purpose, code)
+    if not sms_res.get('success'):
+        return {'success': False, 'error': sms_res.get('error', "Échec de l'envoi du SMS.")}
+
+    record['sms_count'] = sms_count + 1
+    record['last_sms_time'] = now
+    record['phone'] = normalized_phone
+    env['ir.config_parameter'].sudo().set_param(param_key, json.dumps(record))
+
+    masked_phone = f"{normalized_phone[:7]}***{normalized_phone[-2:]}"
+    return {
+        'success': True,
+        'message': f"Code envoyé par SMS au {masked_phone}.",
+        'masked_phone': masked_phone,
+        'sms_count': record['sms_count'],
+        'cooldown': 45,
     }
 
 

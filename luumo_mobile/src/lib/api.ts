@@ -222,6 +222,74 @@ export const mobileApi = {
     return body.data;
   },
 
+  async requestRegisterOtp(
+    serverUrl: string,
+    input: { company_name: string; admin_name: string; login: string; phone: string; password: string; business_profile?: string }
+  ): Promise<{ message: string; masked_email: string; cooldown_sms: number }> {
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/register/request-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || "Échec d'envoi du code d'activation");
+    }
+    return body.data;
+  },
+
+  async resendRegisterSms(
+    serverUrl: string,
+    input: { login: string; phone: string }
+  ): Promise<{ message: string; masked_phone: string; cooldown: number }> {
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/register/resend-sms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || "Échec d'envoi du SMS de secours");
+    }
+    return body.data;
+  },
+
+  async registerCompany(
+    serverUrl: string,
+    input: {
+      company_name: string;
+      admin_name: string;
+      login: string;
+      phone: string;
+      city?: string;
+      password: string;
+      business_profile?: string;
+      code: string;
+    }
+  ): Promise<MobileSession> {
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || "Échec de création du compte");
+    }
+    const session: MobileSession = {
+      mode: "live",
+      serverUrl: cleanUrl,
+      sessionId: body.data.session_id,
+      user: body.data.user,
+      currency: body.data.currency,
+    };
+    setMobileSession(session);
+    return session;
+  },
+
   startDemo(): MobileSession {
     const session: MobileSession = {
       mode: "demo",

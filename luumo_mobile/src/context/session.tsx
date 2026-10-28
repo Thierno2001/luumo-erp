@@ -8,6 +8,19 @@ type SessionContextValue = {
   isTrialExpired: boolean;
   subscription: CompanySubscriptionInfo | null;
   login: (serverUrl: string, user: string, pass: string) => Promise<void>;
+  register: (
+    serverUrl: string,
+    input: {
+      company_name: string;
+      admin_name: string;
+      login: string;
+      phone: string;
+      city?: string;
+      password: string;
+      business_profile?: string;
+      code: string;
+    }
+  ) => Promise<void>;
   startDemo: () => void;
   logout: () => void;
   upgradePlan: (planId: BusinessPlanId) => Promise<void>;
@@ -84,6 +97,24 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
     setSession(s);
   };
 
+  const register = async (
+    serverUrl: string,
+    input: {
+      company_name: string;
+      admin_name: string;
+      login: string;
+      phone: string;
+      city?: string;
+      password: string;
+      business_profile?: string;
+      code: string;
+    }
+  ) => {
+    const s = await mobileApi.registerCompany(serverUrl, input);
+    setForceTrialExpired(false);
+    setSession(s);
+  };
+
   const startDemo = () => {
     const s = mobileApi.startDemo();
     setForceTrialExpired(false);
@@ -145,6 +176,7 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
         isTrialExpired,
         subscription: sub,
         login,
+        register,
         startDemo,
         logout,
         upgradePlan,

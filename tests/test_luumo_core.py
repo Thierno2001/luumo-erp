@@ -354,6 +354,60 @@ class TestLuumoOtpAndNotifications(unittest.TestCase):
         store['attempts'] += 1
         self.assertGreaterEqual(store['attempts'], 3)
 
+    def test_smart_routing_4_economy_rules(self):
+        """Vérifie le respect strict des 4 règles d'économie intelligente :
+        1. Email d'abord (gratuit).
+        2. Fallback SMS après 45s avec le même code.
+        3. Plafond 3 SMS max & validation préfixe guinéen (+224 6xx).
+        4. Vérification obligatoire.
+        """
+        import time
+        from unittest.mock import MagicMock
+        from services.otp_service import resend_smart_otp_sms
+
+        # Cas 1 : Tentative avant les 45 secondes -> Refus immédiat (économie)
+        mock_env = MagicMock()
+        mock_record = {
+            'code': '654321',
+            'hash': 'mock_hash',
+            'salt': 'salt',
+            'created_at': time.time(),
+            'expires_at': time.time() + 600,
+            'attempts': 0,
+            'sms_count': 0,
+            'last_sms_time': 0,
+            'phone': '+224620123456',
+        }
+        def mock_get_param(k, default=None):
+            if k.startswith('luumo_otp_'):
+                return json.dumps(mock_record)
+            return default or ''
+        mock_env['ir.config_parameter'].sudo().get_param.side_effect = mock_get_param
+
+        res_early = resend_smart_otp_sms(mock_env, 'test@entreprise.gn', 'account_verify')
+        self.assertFalse(res_early['success'])
+        self.assertIn('patienter', res_early['error'].lower())
+
+        # Cas 2 : Numéro étranger surtaxé non guinéen -> Refus anti-fraude
+        mock_record['created_at'] = time.time() - 50  # 50s écoulées
+        mock_record['phone'] = '+33612345678'
+        res_fraud = resend_smart_otp_sms(mock_env, 'test@entreprise.gn', 'account_verify', phone='+33612345678')
+        self.assertFalse(res_fraud['success'])
+        self.assertIn('guinéen non reconnu', res_fraud['error'])
+
+        # Cas 3 : Numéro guinéen valide (+224 620...) après 45s -> Succès avec le MÊME code
+        mock_record['phone'] = '+224 620 12 34 56'
+        res_valid = resend_smart_otp_sms(mock_env, 'test@entreprise.gn', 'account_verify', phone='+224620123456')
+        self.assertTrue(res_valid['success'])
+        self.assertEqual(res_valid['sms_count'], 1)
+
+        # Cas 4 : Plafond 3 SMS atteint -> Blocage des SMS supplémentaires
+        mock_record['sms_count'] = 3
+        mock_record['last_sms_time'] = time.time() - 100
+        res_limit = resend_smart_otp_sms(mock_env, 'test@entreprise.gn', 'account_verify')
+        self.assertFalse(res_limit['success'])
+        self.assertIn('limite de sms atteinte', res_limit['error'].lower())
+
 
 if __name__ == '__main__':
     unittest.main()

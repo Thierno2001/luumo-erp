@@ -16,6 +16,7 @@ import type {
   AdminPaymentItem,
   AdminUserItem,
   BusinessPlanId,
+  BusinessProfile,
   CompanyAppsResponse,
   CompanySubscriptionInfo,
   CreateCustomerInput,
@@ -220,6 +221,49 @@ export const api = {
     return session;
   },
 
+  async requestRegisterOtp(input: {
+    company_name: string;
+    admin_name: string;
+    login: string;
+    phone: string;
+    password: string;
+    business_profile?: BusinessProfile;
+  }): Promise<{ message: string; masked_email: string; cooldown_sms: number; _debug_code?: string }> {
+    if (isDemo()) {
+      return {
+        message: "Code d'activation démo : 123456",
+        masked_email: input.login,
+        cooldown_sms: 45,
+        _debug_code: "123456",
+      };
+    }
+    return (
+      await post<{ message: string; masked_email: string; cooldown_sms: number; _debug_code?: string }>(
+        "/auth/register/request-otp",
+        input
+      )
+    ).data;
+  },
+
+  async resendRegisterSms(input: {
+    login: string;
+    phone: string;
+  }): Promise<{ message: string; masked_phone: string; cooldown: number }> {
+    if (isDemo()) {
+      return {
+        message: "Code renvoyé par SMS démo : 123456",
+        masked_phone: input.phone,
+        cooldown: 45,
+      };
+    }
+    return (
+      await post<{ message: string; masked_phone: string; cooldown: number }>(
+        "/auth/register/resend-sms",
+        input
+      )
+    ).data;
+  },
+
   async registerCompany(input: RegisterCompanyInput): Promise<Session> {
     const company_name = sanitizeTextOwasp(input.company_name, "Nom de l'entreprise", {
       required: true,
@@ -258,6 +302,7 @@ export const api = {
       nif_rccm,
       password: input.password,
       business_profile: input.business_profile || "retail",
+      code: input.code,
     });
     const session: Session = { mode: "live", user: data.user, currency: data.currency };
     writeSession(session);

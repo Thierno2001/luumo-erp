@@ -181,6 +181,7 @@ export type RegisterCompanyInput = {
   password: string;
   mode?: "live" | "demo";
   business_profile?: BusinessProfile;
+  code?: string;
 };
 
 export type PaymentState = "paid" | "in_payment" | "partial" | "not_paid" | "not_invoiced";

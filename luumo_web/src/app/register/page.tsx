@@ -19,10 +19,15 @@ import {
   EyeOff,
   ChevronDown,
   Sparkles,
+  KeyRound,
+  MessageSquare,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 import { useSession } from "@/context/session";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
 import { evaluatePasswordOwasp } from "@/lib/security";
+import { api } from "@/lib/api";
 import type { BusinessProfile } from "@/lib/types";
 
 export default function RegisterCompanyPage() {
@@ -49,6 +54,23 @@ export default function RegisterCompanyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Étape progressive : 1 = Saisie informations, 2 = Vérification OTP obligatoire
+  const [step, setStep] = useState<1 | 2>(1);
+  const [otpCode, setOtpCode] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [smsCooldown, setSmsCooldown] = useState(0);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [smsSuccessNotice, setSmsSuccessNotice] = useState<string | null>(null);
+
+  // Décompte du cooldown 45s pour le SMS
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const t = setInterval(() => {
+      setSmsCooldown((c) => c - 1);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [smsCooldown]);
+
   const pwAnalysis = useMemo(
     () =>
       evaluatePasswordOwasp(password, {
@@ -59,7 +81,8 @@ export default function RegisterCompanyPage() {
     [password, loginEmail, adminName, companyName]
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Étape 1 : Demande de code par Email d'abord (Règle 1: Gratuit 0 GNF)
+  const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -74,6 +97,64 @@ export default function RegisterCompanyPage() {
 
     setLoading(true);
     try {
+      const res = await api.requestRegisterOtp({
+        company_name: companyName,
+        admin_name: adminName,
+        login: loginEmail,
+        phone,
+        password,
+        business_profile: businessProfile,
+      });
+      setMaskedEmail(res.masked_email || loginEmail);
+      setSmsCooldown(res.cooldown_sms || 45);
+      setStep(2);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initier la vérification du compte."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Étape 2.B : Bascule de secours sur Nimba SMS (Règles 2 & 3: même code après 45s)
+  const handleResendSms = async () => {
+    if (smsCooldown > 0 || smsLoading) return;
+    setError(null);
+    setSmsSuccessNotice(null);
+    setSmsLoading(true);
+    try {
+      const res = await api.resendRegisterSms({
+        login: loginEmail,
+        phone,
+      });
+      setSmsSuccessNotice(res.message);
+      setSmsCooldown(res.cooldown || 45);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Échec de l'envoi du SMS de secours."
+      );
+    } finally {
+      setSmsLoading(false);
+    }
+  };
+
+  // Étape 2 : Confirmation avec validation du code OTP (Règle 4: Obligatoire & Atomique)
+  const handleConfirmRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (otpCode.trim().length !== 6) {
+      setError("Veuillez saisir le code d'activation à 6 chiffres.");
+      return;
+    }
+
+    setLoading(true);
+    try {
       await registerCompany({
         company_name: companyName,
         admin_name: adminName,
@@ -82,12 +163,13 @@ export default function RegisterCompanyPage() {
         city,
         password,
         business_profile: businessProfile,
+        code: otpCode.trim(),
       });
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Impossible de créer le compte."
+          : "Impossible de finaliser l'inscription avec ce code."
       );
     } finally {
       setLoading(false);
@@ -117,10 +199,12 @@ export default function RegisterCompanyPage() {
               <span>14 jours d&apos;essai gratuit inclus • Sans carte bancaire</span>
             </div>
             <h1 className="font-heading text-2xl font-bold text-[#0B2920]">
-              Créer votre compte Luumo
+              {step === 1 ? "Créer votre compte Luumo" : "Activation de votre compte"}
             </h1>
             <p className="text-xs sm:text-sm text-[#526B63] mt-1">
-              Renseignez les informations essentielles de votre activité pour accéder à vos applications.
+              {step === 1
+                ? "Renseignez les informations essentielles de votre activité pour accéder à vos applications."
+                : `Veuillez saisir le code d'activation reçu pour activer votre période d'essai de 14 jours.`}
             </p>
           </div>
 
@@ -131,7 +215,8 @@ export default function RegisterCompanyPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {step === 1 ? (
+            <form onSubmit={handleRequestOtp} className="space-y-4" noValidate>
             <div>
               <label className="block text-xs font-semibold text-[#0B2920] mb-1">
                 Nom de l&apos;entreprise ou de la boutique
@@ -333,9 +418,16 @@ export default function RegisterCompanyPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 rounded-xl bg-[#115040] hover:bg-[#0B382C] disabled:opacity-60 text-white font-heading font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-xl bg-[#115040] hover:bg-[#0B382C] disabled:opacity-60 text-white font-heading font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
-              {loading ? "Création en cours..." : "Créer mon compte"}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  <span>Vérification...</span>
+                </>
+              ) : (
+                <span>Vérifier et créer mon compte →</span>
+              )}
             </button>
 
             <p className="text-center text-xs text-[#526B63]">
@@ -348,6 +440,103 @@ export default function RegisterCompanyPage() {
               </Link>
             </p>
           </form>
+        ) : (
+          /* ÉTAPE 2 : VÉRIFICATION OTP OBLIGATOIRE & SMART ROUTING NIMBA SMS */
+          <form onSubmit={handleConfirmRegister} className="space-y-4" noValidate>
+            <div className="p-4 rounded-xl bg-[#E8F5EE] border border-[#C6E6D5] space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#0B6E4F]">
+                <Mail className="w-4 h-4 text-[#0B6E4F]" />
+                <span>Code d&apos;activation envoyé par email</span>
+              </div>
+              <p className="text-xs text-[#06231A] leading-relaxed">
+                Un code de sécurité à 6 chiffres a été envoyé à <strong>{maskedEmail || loginEmail}</strong> (valide 10 minutes).
+              </p>
+            </div>
+
+            {smsSuccessNotice && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{smsSuccessNotice}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-[#0B2920] mb-1.5">
+                Code d&apos;activation à 6 chiffres
+              </label>
+              <div className="relative">
+                <KeyRound className="w-4 h-4 text-[#526B63] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  autoFocus
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="• • • • • •"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-[#115040] bg-[#F7F9F8] text-center font-mono text-xl font-bold tracking-[0.4em] text-[#0B2920] focus:bg-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* RÈGLES 2 & 3 : FALLBACK SMS NIMBA INTELLIGENT APRÈS 45 SECONDES */}
+            <div className="p-3.5 rounded-xl border border-[#DCE5E1] bg-[#F7F9F8] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[#526B63]">
+                  Pas reçu l&apos;email ou pas d&apos;accès messagerie ?
+                </span>
+                {smsCooldown > 0 && (
+                  <span className="text-[11px] font-mono text-[#F2B705] bg-[#06231A] px-2 py-0.5 rounded-full font-bold">
+                    {smsCooldown}s
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={smsCooldown > 0 || smsLoading}
+                onClick={handleResendSms}
+                className="w-full py-2.5 px-3 rounded-lg border border-[#DCE5E1] bg-white hover:bg-slate-50 disabled:opacity-50 text-xs font-semibold text-[#0B2920] flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-[#0B6E4F]" />
+                <span>
+                  {smsLoading
+                    ? "Envoi du SMS Nimba en cours..."
+                    : smsCooldown > 0
+                      ? `Recevoir le code par SMS au ${phone} (actif dans ${smsCooldown}s)`
+                      : `Recevoir le code par SMS au ${phone}`}
+                </span>
+              </button>
+            </div>
+
+            <div className="pt-2 space-y-2.5">
+              <button
+                type="submit"
+                disabled={loading || otpCode.length !== 6}
+                className="w-full py-3.5 px-4 rounded-xl bg-[#115040] hover:bg-[#0B382C] disabled:opacity-50 text-white font-heading font-bold text-sm flex items-center justify-center gap-2 transition shadow-md cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Activation de votre boutique...</span>
+                  </>
+                ) : (
+                  <span>Confirmer et activer ma boutique →</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  setError(null);
+                }}
+                className="w-full py-2 text-xs font-semibold text-[#526B63] hover:text-[#0B2920] transition text-center cursor-pointer"
+              >
+                ← Modifier mes informations (email ou téléphone)
+              </button>
+            </div>
+          </form>
+        )}
         </div>
       </div>
     </div>
