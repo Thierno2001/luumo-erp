@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,8 +11,18 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Lock, ShieldCheck, Sparkles, User as UserIcon, Server } from "lucide-react-native";
+import {
+  Lock,
+  ShieldCheck,
+  Sparkles,
+  User as UserIcon,
+  Server,
+  KeyRound,
+  Phone,
+  X,
+} from "lucide-react-native";
 import { useMobileSession } from "@/context/session";
+import { mobileApi } from "@/lib/api";
 import { BrandAccentBar, LuumoLogo, PrimaryButton } from "@/components/ui";
 import { colors, radii } from "@/theme";
 
@@ -25,16 +36,49 @@ export default function MobileLoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Modal Mot de passe oublié (Mobile)
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotLogin, setForgotLogin] = useState("");
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+
   const handleLogin = async () => {
     setError(null);
     setLoading(true);
     try {
-      await login(serverUrl, userLogin, password);
+      await login(serverUrl, userLogin.trim(), password);
       router.replace("/(tabs)");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de connexion");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async () => {
+    setForgotError(null);
+    setForgotSuccess(null);
+    setForgotLoading(true);
+    try {
+      const res = await mobileApi.resetPassword(serverUrl, {
+        login: forgotLogin.trim(),
+        phone: forgotPhone.trim(),
+        new_password: forgotNewPassword,
+      });
+      setForgotSuccess(res.message);
+      setUserLogin(forgotLogin.trim());
+      setPassword(forgotNewPassword);
+      setTimeout(() => {
+        setForgotOpen(false);
+        setForgotSuccess(null);
+      }, 2500);
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : "Échec de réinitialisation");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -91,7 +135,19 @@ export default function MobileLoginScreen() {
 
           {/* Mot de passe */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <Pressable
+                onPress={() => {
+                  setForgotLogin(userLogin.trim());
+                  setForgotError(null);
+                  setForgotSuccess(null);
+                  setForgotOpen(true);
+                }}
+              >
+                <Text style={styles.forgotLink}>Mot de passe oublié ?</Text>
+              </Pressable>
+            </View>
             <View style={styles.inputWrapper}>
               <Lock size={16} color="#708F83" style={styles.inputIcon} />
               <TextInput
@@ -161,6 +217,96 @@ export default function MobileLoginScreen() {
           © {new Date().getFullYear()} LUUMO ERP • République de Guinée
         </Text>
       </ScrollView>
+
+      {/* Modal Réinitialisation Mot de passe (Mobile) */}
+      <Modal visible={forgotOpen} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <KeyRound size={18} color="#F3BC33" />
+                <Text style={styles.modalTitle}>Réinitialiser mot de passe</Text>
+              </View>
+              <Pressable onPress={() => setForgotOpen(false)} hitSlop={12}>
+                <X size={18} color="#8FAEA1" />
+              </Pressable>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Validez votre email et numéro de téléphone commerçant pour définir un nouveau mot de passe.
+            </Text>
+
+            {forgotError && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{forgotError}</Text>
+              </View>
+            )}
+
+            {forgotSuccess && (
+              <View style={styles.successBox}>
+                <Text style={styles.successText}>{forgotSuccess}</Text>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email commerçant</Text>
+              <TextInput
+                value={forgotLogin}
+                onChangeText={setForgotLogin}
+                autoCapitalize="none"
+                placeholder="contact@entreprise.gn"
+                placeholderTextColor="#526B63"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Téléphone (+224 ...)</Text>
+              <TextInput
+                value={forgotPhone}
+                onChangeText={setForgotPhone}
+                keyboardType="phone-pad"
+                placeholder="+224 620 00 00 00"
+                placeholderTextColor="#526B63"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nouveau mot de passe</Text>
+              <TextInput
+                value={forgotNewPassword}
+                onChangeText={setForgotNewPassword}
+                secureTextEntry
+                placeholder="Min. 12 car, 1 Maj, 1 Chiffre, 1 Symbole"
+                placeholderTextColor="#526B63"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setForgotOpen(false)}
+                style={styles.cancelBtn}
+              >
+                <Text style={styles.cancelBtnText}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleForgotSubmit}
+                disabled={forgotLoading}
+                style={[styles.saveBtn, forgotLoading && styles.submitBtnDisabled]}
+              >
+                <Text style={styles.saveBtnText}>
+                  {forgotLoading ? "Validation..." : "Valider"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -169,6 +315,91 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#071913",
+  },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  forgotLink: {
+    fontSize: 11,
+    color: "#34D399",
+    fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: "#0B231B",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#1E4D3B",
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    color: "#8FAEA1",
+    lineHeight: 16,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 8,
+  },
+  cancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1E4D3B",
+  },
+  cancelBtnText: {
+    color: "#8FAEA1",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  saveBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#0B6E4F",
+  },
+  saveBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  successBox: {
+    backgroundColor: "#0E3827",
+    borderWidth: 1,
+    borderColor: "#1E7B54",
+    borderRadius: 12,
+    padding: 10,
+  },
+  successText: {
+    color: "#7EE7B8",
+    fontSize: 12,
+    fontWeight: "600",
   },
   container: {
     padding: 20,

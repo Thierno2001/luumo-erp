@@ -282,6 +282,17 @@ export const api = {
     writeSession(null);
   },
 
+  async resetPassword(input: {
+    login: string;
+    phone: string;
+    new_password: string;
+  }): Promise<{ message: string; login: string }> {
+    if (isDemo()) {
+      return { message: "Mot de passe réinitialisé avec succès (Mode démo).", login: input.login };
+    }
+    return (await post<{ message: string; login: string }>("/auth/reset-password", input)).data;
+  },
+
   async dashboard(): Promise<Dashboard> {
     if (isDemo()) return demo.dashboard();
     return (await get<Dashboard>("/dashboard")).data;

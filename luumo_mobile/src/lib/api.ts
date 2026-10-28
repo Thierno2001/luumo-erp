@@ -188,6 +188,23 @@ export const mobileApi = {
     return session;
   },
 
+  async resetPassword(
+    serverUrl: string,
+    input: { login: string; phone: string; new_password: string }
+  ): Promise<{ message: string; login: string }> {
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const res = await fetch(`${cleanUrl}/api/luumo/v1/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || "Échec de réinitialisation du mot de passe");
+    }
+    return body.data;
+  },
+
   startDemo(): MobileSession {
     const session: MobileSession = {
       mode: "demo",

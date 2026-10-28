@@ -11,8 +11,13 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  CheckCircle2,
+  Phone,
+  KeyRound,
+  X,
 } from "lucide-react";
 import { useSession } from "@/context/session";
+import { api } from "@/lib/api";
 import { BrandAccentBar, LuumoLogo } from "@/components/ui";
 
 export default function LoginPage() {
@@ -23,12 +28,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Modal Mot de passe oublié
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotLogin, setForgotLogin] = useState("");
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await login(userLogin, password);
+      await login(userLogin.trim(), password);
     } catch (err) {
       setError(
         err instanceof Error
@@ -37,6 +51,34 @@ export default function LoginPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotSuccess(null);
+    setForgotLoading(true);
+    try {
+      const res = await api.resetPassword({
+        login: forgotLogin.trim(),
+        phone: forgotPhone.trim(),
+        new_password: forgotNewPassword,
+      });
+      setForgotSuccess(res.message);
+      setUserLogin(forgotLogin.trim());
+      setPassword(forgotNewPassword);
+      setTimeout(() => {
+        setForgotOpen(false);
+        setForgotSuccess(null);
+        setError(null);
+      }, 2500);
+    } catch (err) {
+      setForgotError(
+        err instanceof Error ? err.message : "Échec de réinitialisation du mot de passe."
+      );
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -111,9 +153,23 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#D1E2DB] mb-1.5">
-                Mot de passe
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-[#D1E2DB]">
+                  Mot de passe
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotLogin(userLogin.trim());
+                    setForgotError(null);
+                    setForgotSuccess(null);
+                    setForgotOpen(true);
+                  }}
+                  className="text-[11px] text-[#34D399] hover:underline cursor-pointer"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -177,6 +233,126 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+
+        {/* Modal Réinitialisation Mot de passe */}
+        {forgotOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-[#0B231B] border border-[#1E4D3B] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative text-left">
+              <div className="flex items-center justify-between pb-3 border-b border-[#18392D]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#11382A] border border-[#1E523F] flex items-center justify-center text-[#F3BC33]">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Réinitialiser mon mot de passe</h3>
+                    <p className="text-[11px] text-[#8FAEA1]">Vérification par email et numéro commerçant</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(false)}
+                  className="text-[#8FAEA1] hover:text-white transition p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {forgotError && (
+                <div className="p-3 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                  <span>{forgotError}</span>
+                </div>
+              )}
+
+              {forgotSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-200 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>{forgotSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleForgotSubmit} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                    Email / Identifiant commerçant
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotLogin}
+                      onChange={(e) => setForgotLogin(e.target.value)}
+                      placeholder="contact@entreprise.gn"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                    Numéro de téléphone commerçant (enregistré à la création)
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="tel"
+                      required
+                      value={forgotPhone}
+                      onChange={(e) => setForgotPhone(e.target.value)}
+                      placeholder="+224 620 00 00 00"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                    />
+                  </div>
+                  <p className="text-[10px] text-[#708F83] mt-1">
+                    Sert de validation de sécurité pour attester que vous êtes le propriétaire du compte.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#D1E2DB] mb-1">
+                    Nouveau mot de passe
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-[#708F83] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      required
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder="Min. 12 car, 1 Maj, 1 Chiffre, 1 Symbole"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#071913] border border-[#1E4D3B] text-white text-xs font-medium placeholder-[#526B63] focus:outline-none focus:border-[#34D399] transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setForgotOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-[#1E4D3B] text-xs font-semibold text-[#8FAEA1] hover:text-white hover:bg-[#11382A] transition cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="px-4 py-2 rounded-xl bg-[#0B6E4F] hover:bg-[#0E8A63] text-white text-xs font-bold transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {forgotLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        <span>Validation...</span>
+                      </>
+                    ) : (
+                      <span>Définir le nouveau mot de passe</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer minimaliste */}

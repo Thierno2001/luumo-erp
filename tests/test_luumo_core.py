@@ -45,6 +45,25 @@ class TestLuumoSecurity(unittest.TestCase):
         self.assertFalse(bool(email_re.match('invalid-email')))
         self.assertFalse(bool(email_re.match('@entreprise.gn')))
 
+    def test_self_service_password_reset_phone_matching(self):
+        """Vérifie que la validation du téléphone commerçant pour la réinitialisation
+        de mot de passe accepte les variantes locales (+224, 00224, espaces) et rejette les fraudes.
+        """
+        user_phone = "+224 620 21 34 56"
+        clean_user = ''.join([d for d in user_phone if d.isdigit()])
+
+        valid_inputs = ["620213456", "+224 620213456", "00224620213456", "620-21-34-56"]
+        for p in valid_inputs:
+            clean_input = ''.join([d for d in p if d.isdigit()])
+            cmp_len = min(8, len(clean_input), len(clean_user))
+            self.assertEqual(clean_input[-cmp_len:], clean_user[-cmp_len:])
+
+        invalid_inputs = ["620000000", "+224 622 99 99 99", "12345"]
+        for p in invalid_inputs:
+            clean_input = ''.join([d for d in p if d.isdigit()])
+            cmp_len = min(8, len(clean_input), len(clean_user))
+            self.assertNotEqual(clean_input[-cmp_len:], clean_user[-cmp_len:])
+
 
 class TestLuumoMobileMoneyUSSD(unittest.TestCase):
     """Vérification de la passerelle de paiement Mobile Money et USSD."""

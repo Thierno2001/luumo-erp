@@ -290,6 +290,63 @@ class LuumoAuthController(LuumoBaseController):
         request.session.logout(keep_db=True)
         return self._ok({'logged_out': True})
 
+    @luumo_route('/auth/reset-password', ['POST'], auth='none')
+    def auth_reset_password(self):
+        """Réinitialisation de mot de passe en libre-service sécurisé.
+        Vérifie l'identifiant email et le numéro de téléphone enregistré du compte.
+        """
+        ip = self._client_ip()
+        ip_ok, ip_wait = check_rate_limit(f'reset_ip:{ip}', max_attempts=5, window_seconds=900)
+        if not ip_ok:
+            return self._error(
+                f"Trop de demandes de réinitialisation. Réessayez dans {ip_wait} secondes.",
+                429,
+                headers={'Retry-After': ip_wait},
+            )
+
+        try:
+            p = self._payload()
+            login = validate_email(p.get('login'), required=True)
+            phone = clean_text(p.get('phone'), "Téléphone commerçant", min_len=6, max_len=30, required=True)
+            new_password = p.get('new_password') or p.get('password') or ''
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        su_env = request.env(user=SUPERUSER_ID)
+        user = su_env['res.users'].search([('login', '=ilike', login)], limit=1)
+        if not user:
+            return self._error("Compte introuvable pour cet identifiant.", 404)
+
+        user_phone = (user.partner_id.phone or user.company_id.phone or '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+        provided_phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+
+        clean_user_digits = ''.join([d for d in user_phone if d.isdigit()])
+        clean_provided_digits = ''.join([d for d in provided_phone if d.isdigit()])
+
+        if len(clean_provided_digits) < 6 or len(clean_user_digits) < 6:
+            return self._error("Numéro de téléphone incomplet pour valider votre compte.", 400)
+
+        cmp_len = min(8, len(clean_provided_digits), len(clean_user_digits))
+        if clean_provided_digits[-cmp_len:] != clean_user_digits[-cmp_len:]:
+            return self._error("Le numéro de téléphone ne correspond pas au compte enregistré.", 403)
+
+        try:
+            validate_password_owasp(new_password, login=user.login, name=user.name)
+        except ValidationError as e:
+            return self._error(str(e), 422)
+
+        user.write({'password': new_password})
+        su_env.cr.commit()
+
+        # Nettoyer les compteurs de tentatives échouées pour permettre une connexion immédiate
+        clear_rate_limit(f'login_acct:{user.login}')
+        clear_rate_limit(f'login_ip:{ip}')
+
+        return self._ok({
+            'message': "Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.",
+            'login': user.login,
+        })
+
     @luumo_route('/company/subscription', ['GET'])
     def get_company_subscription(self):
         """Récupère l'état complet du forfait, de l'échéance et des factures d'abonnement."""
