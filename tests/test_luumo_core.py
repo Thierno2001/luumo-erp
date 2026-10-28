@@ -113,6 +113,21 @@ class TestLuumoSubscriptionRules(unittest.TestCase):
         self.assertEqual(plans['retail']['price'] * 10, 1500000)
         self.assertEqual(plans['wholesale']['price'] * 10, 4500000)
 
+    def test_inventory_present_in_all_plans(self):
+        # Règle Métier Luumo : l'application Inventaire/Catalogue doit être incluse
+        # dans TOUS les forfaits pour permettre la gestion des articles, pièces et prix.
+        plans_apps = {
+            'retail': ['pos', 'inventory', 'customers', 'dashboard'],
+            'services': ['inventory', 'orders', 'customers', 'hr', 'dashboard'],
+            'wholesale': ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet'],
+        }
+        for plan_id, apps in plans_apps.items():
+            self.assertIn(
+                'inventory',
+                apps,
+                f"L'application inventaire doit être incluse dans le forfait '{plan_id}'",
+            )
+
 
 class TestLuumoAdminBackoffice(unittest.TestCase):
     """Vérification des règles d'administration de la plateforme Luumo (Option A)."""

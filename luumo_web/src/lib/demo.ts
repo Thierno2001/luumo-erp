@@ -44,9 +44,9 @@ export const DEMO_PLANS: Record<BusinessPlanId, CompanyPlan> = {
   services: {
     id: "services",
     name: "Forfait Services",
-    allowed_apps: ["orders", "customers", "hr", "dashboard"],
+    allowed_apps: ["inventory", "orders", "customers", "hr", "dashboard"],
     monthly_price: 250000,
-    description: "Sociétés de prestations, agences, cabinets et maintenance.",
+    description: "Sociétés de prestations, agences, cabinets, ateliers et maintenance.",
     badge: "Services",
   },
   wholesale: {

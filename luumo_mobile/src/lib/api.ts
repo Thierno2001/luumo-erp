@@ -295,9 +295,9 @@ export const mobileApi = {
           services: {
             id: "services",
             name: "Forfait Services",
-            allowed_apps: ["orders", "customers", "hr", "dashboard"],
+            allowed_apps: ["inventory", "orders", "customers", "hr", "dashboard"],
             monthly_price: 250000,
-            description: "Sociétés de prestations et agences.",
+            description: "Sociétés de prestations, agences et ateliers.",
           },
           wholesale: {
             id: "wholesale",

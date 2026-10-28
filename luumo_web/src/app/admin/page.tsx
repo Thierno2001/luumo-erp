@@ -824,6 +824,7 @@ export default function AdminBackofficePage() {
                 Agences de prestation, cabinets comptables, maintenance et ateliers.
               </p>
               <div className="pt-2 border-t border-[#18392D] text-xs text-[#D1E2DB] space-y-2">
+                <div>✓ Inventaire &amp; Catalogue articles / pièces</div>
                 <div>✓ Devis &amp; Facturation normalisée</div>
                 <div>✓ Suivi des clients &amp; créances</div>
                 <div>✓ Ressources Humaines</div>
