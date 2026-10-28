@@ -155,7 +155,7 @@ class TestLuumoSubscriptionRules(unittest.TestCase):
         # dans TOUS les forfaits pour permettre la gestion des articles, pièces et prix.
         plans_apps = {
             'retail': ['pos', 'inventory', 'customers', 'dashboard'],
-            'services': ['inventory', 'orders', 'customers', 'hr', 'dashboard'],
+            'services': ['pos', 'orders', 'inventory', 'customers', 'hr', 'dashboard'],
             'wholesale': ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet'],
         }
         for plan_id, apps in plans_apps.items():
@@ -231,7 +231,7 @@ class TestLuumoRbacRoles(unittest.TestCase):
         """
         plans = {
             'retail': ['pos', 'inventory', 'customers', 'dashboard'],
-            'services': ['inventory', 'orders', 'customers', 'hr', 'dashboard'],
+            'services': ['pos', 'orders', 'inventory', 'customers', 'hr', 'dashboard'],
             'wholesale': ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet'],
         }
         manager_role_apps = ['pos', 'orders', 'dashboard', 'inventory', 'purchases', 'customers', 'hr', 'fleet']
@@ -241,10 +241,10 @@ class TestLuumoRbacRoles(unittest.TestCase):
         effective_wholesale = [a for a in manager_role_apps if a in plans['wholesale']]
         self.assertEqual(len(effective_wholesale), 8)
 
-        # Cas 2 : Passage immédiat au Forfait Services -> strictement 5 applications
+        # Cas 2 : Passage immédiat au Forfait Services -> 6 applications (dont pos)
         effective_services = [a for a in manager_role_apps if a in plans['services']]
-        self.assertEqual(len(effective_services), 5)
-        self.assertNotIn('pos', effective_services)
+        self.assertEqual(len(effective_services), 6)
+        self.assertIn('pos', effective_services)
         self.assertNotIn('fleet', effective_services)
         self.assertNotIn('purchases', effective_services)
 
@@ -254,9 +254,9 @@ class TestLuumoRbacRoles(unittest.TestCase):
         self.assertNotIn('orders', effective_retail)
         self.assertNotIn('hr', effective_retail)
 
-        # Cas 4 : Caissier sur Forfait Services (qui n'a pas de 'pos') -> reste uniquement 'customers'
+        # Cas 4 : Caissier sur Forfait Services (qui a 'pos' et 'customers') -> 'pos' et 'customers'
         effective_cashier_services = [a for a in cashier_role_apps if a in plans['services']]
-        self.assertEqual(effective_cashier_services, ['customers'])
+        self.assertEqual(set(effective_cashier_services), {'pos', 'customers'})
 
 
 if __name__ == '__main__':

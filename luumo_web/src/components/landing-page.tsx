@@ -358,10 +358,13 @@ export function LuumoLandingPage() {
 
                 <div className="pt-4 border-t border-[#183E30] space-y-2.5 text-xs text-[#D1E2DB]">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> Inventaire & catalogue d'articles / prestations
+                    <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> Caisse comptoir & Point de Vente
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> Commandes, devis & facturation
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> Inventaire & catalogue d'articles / prestations
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> Suivi des clients & créances

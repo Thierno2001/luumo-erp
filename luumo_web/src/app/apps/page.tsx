@@ -363,7 +363,7 @@ export default function SubscriptionBillingPage() {
                           {p.id === "wholesale"
                             ? "Caisse, Facturation, Stocks, Achats, Flotte & Salaires"
                             : p.id === "services"
-                              ? "Facturation, Devis, Clients, Personnel & Dépenses"
+                              ? "Caisse & Vente directe, Facturation & Devis, Stocks, Salaires & Équipe"
                               : "Caisse, Gestion des stocks, Crédits clients & Bilan"}
                         </div>
                       </div>

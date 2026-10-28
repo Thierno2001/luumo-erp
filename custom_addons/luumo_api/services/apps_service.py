@@ -36,7 +36,7 @@ PLANS = {
     'services': {
         'id': 'services',
         'name': 'Forfait Services',
-        'allowed_apps': ['inventory', 'orders', 'customers', 'hr', 'dashboard'],
+        'allowed_apps': ['pos', 'orders', 'inventory', 'customers', 'hr', 'dashboard'],
         'monthly_price': 250000,
         'description': 'Sociétés de prestations, agences, cabinets, ateliers et maintenance.',
         'badge': 'Services',
