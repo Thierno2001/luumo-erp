@@ -27,6 +27,7 @@ import {
   FileText,
   Clock,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function SubscriptionBillingPage() {
@@ -530,54 +531,92 @@ export default function SubscriptionBillingPage() {
         </form>
       </Modal>
 
-      {/* Modal Surclassement */}
+      {/* Modal Surclassement / Changement de Forfait */}
       <Modal
         open={upgradeTarget !== null}
         onClose={() => setUpgradeTarget(null)}
         title={
           upgradeTarget
-            ? `Passer au ${upgradeTarget.name}`
+            ? `Changer de formule : ${upgradeTarget.name}`
             : "Changer de forfait"
         }
       >
-        {upgradeTarget && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-[#FEFBF2] border border-[#F3BC33]/40 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#8F5E00]">
-                  {upgradeTarget.name}
-                </span>
-                <span className="font-heading text-sm font-bold text-[#0B2920]">
-                  {formatGNF(upgradeTarget.monthly_price)} /mois
-                </span>
+        {upgradeTarget && (() => {
+          const isDowngrade = Boolean(
+            currentPlan && upgradeTarget.monthly_price < currentPlan.monthly_price
+          );
+          const currentApps = currentPlan?.allowed_apps ?? [];
+          const targetApps = upgradeTarget.allowed_apps ?? [];
+          const removedApps = currentApps.filter((a) => !targetApps.includes(a));
+          const addedApps = targetApps.filter((a) => !currentApps.includes(a));
+
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-[#FEFBF2] border border-[#F3BC33]/40 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#8F5E00]">
+                    {upgradeTarget.name}
+                  </span>
+                  <span className="font-heading text-sm font-bold text-[#0B2920]">
+                    {formatGNF(upgradeTarget.monthly_price)} /mois
+                  </span>
+                </div>
+                <p className="text-[#526B63]">{upgradeTarget.description}</p>
               </div>
-              <p className="text-[#526B63]">{upgradeTarget.description}</p>
-            </div>
 
-            <p className="text-xs text-[#526B63]">
-              Votre compte sera immédiatement surclassé et toutes les applications incluses dans le{" "}
-              <strong>{upgradeTarget.name}</strong> seront ajoutées à votre écran d&apos;accueil.
-            </p>
+              {isDowngrade ? (
+                <div className="p-3.5 rounded-xl bg-[#FFF7ED] border border-[#FFEDD5] text-xs text-[#9A3412] space-y-2">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-[#EA580C]">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Passage à une formule inférieure</span>
+                  </div>
+                  {removedApps.length > 0 && (
+                    <p className="text-[11px] leading-relaxed">
+                      Les applications suivantes ne seront plus affichées sur votre écran d&apos;accueil :{" "}
+                      <strong>{removedApps.join(", ")}</strong>.
+                    </p>
+                  )}
+                  <p className="text-[11px] text-[#7C2D12] font-medium bg-white/70 p-2.5 rounded-lg border border-[#FDBA74]/50 leading-relaxed">
+                    🔒 <strong>Zéro perte de données :</strong> Toutes les données précédemment créées (véhicules de flotte, dépenses RH, réceptions fournisseurs) restent enregistrées en toute sécurité dans votre base de données et seront immédiatement réactivées si vous repassez sur une formule supérieure.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs text-[#526B63]">
+                  <p>
+                    Votre compte sera immédiatement surclassé vers le <strong>{upgradeTarget.name}</strong>.
+                  </p>
+                  {addedApps.length > 0 && (
+                    <div className="p-2.5 rounded-lg bg-[#E8F5EE] border border-[#C6E6D5] text-[#0B6E4F] text-[11px] font-semibold">
+                      ✨ Nouvelles applications débloquées : {addedApps.join(", ")}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            <div className="pt-2 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setUpgradeTarget(null)}
-                className="px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                disabled={upgrading}
-                onClick={handleConfirmUpgrade}
-                className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50 inline-flex items-center gap-2"
-              >
-                {upgrading ? "Activation..." : "Valider le surclassement"}
-              </button>
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setUpgradeTarget(null)}
+                  className="px-4 py-2.5 rounded-xl border border-[#DCE5E1] text-xs font-semibold text-[#526B63] cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={upgrading}
+                  onClick={handleConfirmUpgrade}
+                  className="px-5 py-2.5 rounded-xl bg-[#115040] hover:bg-[#0B382C] text-white text-xs font-bold cursor-pointer disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {upgrading
+                    ? "Mise à jour..."
+                    : isDowngrade
+                    ? "Confirmer le changement"
+                    : "Valider le surclassement"}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Modal Reçu de Facture imprimable */}
